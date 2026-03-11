@@ -181,8 +181,9 @@
         </div>
     </div>
 
+    <script src="js/config.js"></script>
     <script>
-        const API_URL = 'http://localhost:5062/api';
+        const API_URL = window.API_BASE || (window.location.origin + '/api');
 
         // Check if already logged in
         window.addEventListener('load', () => {

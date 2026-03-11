@@ -1,5 +1,5 @@
 // Dashboard JavaScript
-const API_BASE = 'http://localhost:5062/api'; // Adjust port as needed
+const API_BASE = window.API_BASE || (window.location.origin + '/api');
 
 // Notification settings
 let lastUnreadCount = 0;

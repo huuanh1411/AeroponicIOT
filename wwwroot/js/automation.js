@@ -1,5 +1,5 @@
 // Automation Rules JavaScript
-const API_BASE = 'http://localhost:5062/api';
+const API_BASE = window.API_BASE || (window.location.origin + '/api');
 let rules = [];
 
 // Initialize

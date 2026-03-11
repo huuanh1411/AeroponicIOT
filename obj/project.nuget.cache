@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "b4BZ4d/OHVI=",
+  "dgSpecHash": "lJ3jxQecSOs=",
   "success": true,
   "projectFilePath": "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj",
   "expectedPackageFiles": [
@@ -77,6 +77,18 @@
       "warningLevel": 1,
       "filePath": "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj",
       "libraryId": "MQTTnet",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    },
+    {
+      "code": "NU1902",
+      "level": "Warning",
+      "message": "Package 'MimeKit' 4.7.0 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-g7hc-96xr-gvvx",
+      "projectPath": "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj",
+      "libraryId": "MimeKit",
       "targetGraphs": [
         "net10.0"
       ]

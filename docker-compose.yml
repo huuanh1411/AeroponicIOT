@@ -1,15 +1,10 @@
 version: '3.8'
 services:
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=Your_password123
-    ports:
-      - "1433:1433"
-    restart: unless-stopped
 
   app:
+    
+    image: n3mnuonghn/aeroponiciot:1.0.0
+    container_name: aeroponiciot
     build:
       context: .
       dockerfile: Dockerfile
@@ -17,7 +12,7 @@ services:
       - "5062:80"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=mssql;Database=AeroponicIOT;User Id=sa;Password=Your_password123;
+      - ConnectionStrings__DefaultConnection=Server=14.225.202.137,1433;Database=AeroponicIOT;User Id=sa;Password=ResoSQL123456@;TrustServerCertificate=true;
     depends_on:
       - mssql
     restart: unless-stopped
