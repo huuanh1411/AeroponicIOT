@@ -37,6 +37,7 @@ function checkAuthentication() {
     header.innerHTML = `
         <span>${username} <small>(${role})</small></span>
         <button id="backBtn" class="btn-secondary" onclick="goBack()">← Về bảng điều khiển</button>
+        <button id="cropsBtn" class="btn-secondary" onclick="goToCrops()">🌿 Cây trồng</button>
         <button id="logoutBtn" class="btn-secondary">Đăng xuất</button>
     `;
     document.getElementById('logoutBtn').addEventListener('click', logout);
@@ -376,6 +377,10 @@ function logout() {
 // Go back to dashboard
 function goBack() {
     window.location.href = 'index.html';
+}
+
+function goToCrops() {
+    window.location.href = 'crops.html';
 }
 
 // Show success

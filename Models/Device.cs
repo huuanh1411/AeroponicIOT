@@ -37,6 +37,9 @@ public class Device
     [Column("last_seen")]
     public DateTime? LastSeen { get; set; }
 
+    [Column("crop_assigned_at")]
+    public DateTime? CropAssignedAt { get; set; }
+
     // For backward compatibility
     [NotMapped]
     public string Name => DeviceName ?? "Unknown Device";

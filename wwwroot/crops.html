@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý cây trồng - Smart Farm IoT</title>
+    <link rel="stylesheet" href="css/crops.css">
+</head>
+<body>
+    <div class="container">
+        <div id="cropsHeader"></div>
+
+        <div class="content">
+            <section class="form-section">
+                <div class="section-header-row">
+                    <h2 class="section-title">Cấu hình cây trồng và chu kỳ</h2>
+                    <button id="resetCropFormBtn" type="button" class="btn-secondary">Biểu mẫu mới</button>
+                </div>
+                <p class="helper-text">Chu kỳ cây trồng được định nghĩa bằng các giai đoạn theo ngày. Khi bạn gán cây trồng cho thiết bị, hệ thống sẽ tự tính giai đoạn hiện tại dựa trên ngày bắt đầu gán cây.</p>
+
+                <form id="cropForm">
+                    <input type="hidden" id="cropId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cropName">Tên cây trồng:</label>
+                            <input type="text" id="cropName" maxlength="100" required placeholder="Ví dụ: Xà lách thủy canh">
+                        </div>
+                        <div class="form-group">
+                            <label for="cropTotalDays">Tổng số ngày dự kiến:</label>
+                            <input type="number" id="cropTotalDays" min="1" placeholder="Ví dụ: 45">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cropDescription">Mô tả:</label>
+                        <input type="text" id="cropDescription" placeholder="Ghi chú về giống cây, mùa vụ hoặc mục tiêu dinh dưỡng">
+                    </div>
+
+                    <div class="stages-section">
+                        <div class="section-header-row compact">
+                            <h3>Giai đoạn chu kỳ</h3>
+                            <button id="addStageBtn" type="button" class="btn-primary">+ Thêm giai đoạn</button>
+                        </div>
+                        <div id="stagesContainer" class="stages-container"></div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Lưu cây trồng</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="devices-section">
+                <h2 class="section-title">Danh sách cây trồng</h2>
+                <div id="cropsGrid" class="crop-grid">
+                    <p class="loading-text">Đang tải cây trồng...</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/crops.js"></script>
+</body>
+</html>

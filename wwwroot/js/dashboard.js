@@ -68,6 +68,7 @@ function bindNavigationButtons() {
     document.getElementById('chartsBtn')?.addEventListener('click', goToCharts);
     document.getElementById('automationBtn')?.addEventListener('click', goToAutomation);
     document.getElementById('devicesBtn')?.addEventListener('click', goToDevices);
+    document.getElementById('cropsBtn')?.addEventListener('click', goToCrops);
     document.getElementById('healthBtn')?.addEventListener('click', goToHealth);
 }
 
@@ -890,6 +891,10 @@ function goToAutomation() {
 // Navigate to device management page
 function goToDevices() {
     window.location.href = 'devices.html';
+}
+
+function goToCrops() {
+    window.location.href = 'crops.html';
 }
 
 // Navigate to health page

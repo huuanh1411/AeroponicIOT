@@ -8,6 +8,7 @@ public class DeviceDto
     public string? Status { get; set; }
     public int? CurrentCropId { get; set; }
     public string? CropName { get; set; }
+    public DateTime? CropAssignedAt { get; set; }
     public int? GardenId { get; set; }
     public string? GardenName { get; set; }
     public DateTime? CreatedAt { get; set; }

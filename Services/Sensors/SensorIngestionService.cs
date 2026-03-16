@@ -78,8 +78,7 @@ public class SensorIngestionService : ISensorIngestionService
             return;
         }
 
-        // Get current crop stage (simplified - first stage)
-        var currentStage = device.Crop?.CropStages.OrderBy(cs => cs.StageOrder).FirstOrDefault();
+        var currentStage = GetCurrentCropStage(device);
         if (currentStage == null)
         {
             return;
@@ -161,6 +160,27 @@ public class SensorIngestionService : ISensorIngestionService
                 alert.Message ?? "An alert has been triggered",
                 alert.Severity ?? "Medium");
         }
+    }
+
+    private CropStage? GetCurrentCropStage(Device device)
+    {
+        if (device.Crop?.CropStages == null || device.Crop.CropStages.Count == 0)
+        {
+            return null;
+        }
+
+        var orderedStages = device.Crop.CropStages
+            .OrderBy(cs => cs.DayStart ?? int.MaxValue)
+            .ToList();
+
+        var cropAssignedAt = device.CropAssignedAt ?? device.CreatedAt ?? DateTime.UtcNow;
+        var cycleDay = Math.Max(1, (int)Math.Floor((DateTime.UtcNow - cropAssignedAt).TotalDays) + 1);
+
+        var matchedStage = orderedStages.FirstOrDefault(stage =>
+            (!stage.DayStart.HasValue || cycleDay >= stage.DayStart.Value) &&
+            (!stage.DayEnd.HasValue || cycleDay <= stage.DayEnd.Value));
+
+        return matchedStage ?? orderedStages.LastOrDefault();
     }
 }
 

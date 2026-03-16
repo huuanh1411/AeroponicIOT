@@ -75,6 +75,7 @@ public class DeviceController : ControllerBase
                 IsActive = d.IsActive,
                 CurrentCropId = d.CurrentCropId,
                 CropName = d.Crop?.Name,
+                CropAssignedAt = d.CropAssignedAt,
                 GardenId = d.GardenId,
                 GardenName = d.Garden?.Name,
                 CreatedAt = d.CreatedAt,
@@ -131,6 +132,7 @@ public class DeviceController : ControllerBase
                 IsActive = device.IsActive,
                 CurrentCropId = device.CurrentCropId,
                 CropName = device.Crop?.Name,
+                CropAssignedAt = device.CropAssignedAt,
                 GardenId = device.GardenId,
                 GardenName = device.Garden?.Name,
                 CreatedAt = device.CreatedAt,
@@ -202,6 +204,7 @@ public class DeviceController : ControllerBase
                 DeviceName = createDto.Name,
                 MacAddress = createDto.MacAddress.ToUpper(),
                 CurrentCropId = createDto.CurrentCropId,
+                CropAssignedAt = createDto.CurrentCropId.HasValue ? DateTime.UtcNow : null,
                 GardenId = createDto.GardenId,
                 UserId = userId,
                 Status = "Active",
@@ -223,6 +226,7 @@ public class DeviceController : ControllerBase
                 Status = device.Status,
                 IsActive = device.IsActive,
                 CurrentCropId = device.CurrentCropId,
+                CropAssignedAt = device.CropAssignedAt,
                 GardenId = device.GardenId,
                 CreatedAt = device.CreatedAt,
                 LastSeen = device.LastSeen
@@ -281,11 +285,17 @@ public class DeviceController : ControllerBase
                 {
                     return BadRequest(new { detail = "Crop not found" });
                 }
+
+                if (device.CurrentCropId != updateDto.CurrentCropId)
+                {
+                    device.CropAssignedAt = DateTime.UtcNow;
+                }
                 device.CurrentCropId = updateDto.CurrentCropId;
             }
             else
             {
                 device.CurrentCropId = null;
+                device.CropAssignedAt = null;
             }
 
             if (updateDto.GardenId.HasValue)
@@ -319,6 +329,7 @@ public class DeviceController : ControllerBase
                 IsActive = device.IsActive,
                 CurrentCropId = device.CurrentCropId,
                 CropName = device.Crop?.Name,
+                CropAssignedAt = device.CropAssignedAt,
                 GardenId = device.GardenId,
                 GardenName = device.Garden?.Name,
                 CreatedAt = device.CreatedAt,
