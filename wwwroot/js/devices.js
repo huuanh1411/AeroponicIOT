@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadCrops();
     loadGardens();
     loadDevices();
+    loadPendingDevices();
     setupEventListeners();
 });
 
@@ -56,6 +57,8 @@ function getAuthHeaders() {
 function setupEventListeners() {
     document.getElementById('addDeviceForm').addEventListener('submit', createDevice);
     document.getElementById('editDeviceForm').addEventListener('submit', updateDevice);
+    document.getElementById('claimDeviceForm').addEventListener('submit', claimDevice);
+    document.getElementById('refreshPendingBtn').addEventListener('click', loadPendingDevices);
 }
 
 // Load crops
@@ -103,8 +106,9 @@ async function loadGardens() {
 function populateCropSelects() {
     const select1 = document.getElementById('cropSelect');
     const select2 = document.getElementById('editCropSelect');
+    const select3 = document.getElementById('claimCropSelect');
 
-    [select1, select2].forEach(select => {
+    [select1, select2, select3].forEach(select => {
         select.innerHTML = '<option value="">Chưa gán cây trồng</option>';
         crops.forEach(crop => {
             const option = document.createElement('option');
@@ -118,8 +122,9 @@ function populateCropSelects() {
 function populateGardenSelects() {
     const select1 = document.getElementById('gardenSelect');
     const select2 = document.getElementById('editGardenSelect');
+    const select3 = document.getElementById('claimGardenSelect');
 
-    [select1, select2].forEach(select => {
+    [select1, select2, select3].forEach(select => {
         select.innerHTML = '<option value="">Chưa gán khu vườn</option>';
         gardens.forEach(garden => {
             const option = document.createElement('option');
@@ -128,6 +133,103 @@ function populateGardenSelects() {
             select.appendChild(option);
         });
     });
+}
+
+async function loadPendingDevices() {
+    try {
+        const response = await fetch(`${API_BASE}/device/pending`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+
+        if (!response.ok) throw new Error('Không thể tải thiết bị chờ nhận quyền');
+
+        const pendingDevices = await response.json();
+        renderPendingDevices(pendingDevices);
+    } catch (error) {
+        console.error('Error loading pending devices:', error);
+        showError('Không thể tải thiết bị chờ nhận quyền');
+    }
+}
+
+function renderPendingDevices(pendingDevices) {
+    const pendingGrid = document.getElementById('pendingDevicesGrid');
+
+    if (!pendingDevices || pendingDevices.length === 0) {
+        pendingGrid.innerHTML = '<p class="no-devices">Không có thiết bị chờ nhận quyền</p>';
+        return;
+    }
+
+    pendingGrid.innerHTML = '';
+    pendingDevices.forEach(device => {
+        const card = document.createElement('div');
+        card.className = 'device-card';
+
+        const lastSeen = device.lastSeen ? new Date(device.lastSeen).toLocaleString('vi-VN') : 'Chưa thấy';
+        const provisionedAt = device.provisionedAt ? new Date(device.provisionedAt).toLocaleString('vi-VN') : 'Không rõ';
+
+        card.innerHTML = `
+            <div class="card-header">
+                <h3>${device.name || 'Pending Device'}</h3>
+                <span class="status-badge inactive">🟡 Chờ nhận quyền</span>
+            </div>
+            <div class="card-details">
+                <div class="detail-row"><span class="label">MAC:</span><span class="value mac">${device.macAddress}</span></div>
+                <div class="detail-row"><span class="label">Chip ID:</span><span class="value">${device.chipId || '-'}</span></div>
+                <div class="detail-row"><span class="label">Firmware:</span><span class="value">${device.firmwareVersion || '-'}</span></div>
+                <div class="detail-row"><span class="label">Provisioned:</span><span class="value">${provisionedAt}</span></div>
+                <div class="detail-row"><span class="label">Lần cuối online:</span><span class="value">${lastSeen}</span></div>
+            </div>
+        `;
+
+        pendingGrid.appendChild(card);
+    });
+}
+
+async function claimDevice(e) {
+    e.preventDefault();
+
+    const payload = {
+        claimCode: document.getElementById('claimCode').value.trim().toUpperCase(),
+        name: document.getElementById('claimDeviceName').value.trim() || null,
+        currentCropId: document.getElementById('claimCropSelect').value ? parseInt(document.getElementById('claimCropSelect').value) : null,
+        gardenId: document.getElementById('claimGardenSelect').value ? parseInt(document.getElementById('claimGardenSelect').value) : null
+    };
+
+    if (!payload.claimCode) {
+        showError('Vui lòng nhập mã nhận quyền');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/device/claim`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Không thể nhận quyền thiết bị');
+        }
+
+        showSuccess('Nhận quyền thiết bị thành công');
+        document.getElementById('claimDeviceForm').reset();
+        await loadPendingDevices();
+        await loadDevices();
+    } catch (error) {
+        console.error('Error claiming device:', error);
+        showError(error.message || 'Không thể nhận quyền thiết bị');
+    }
 }
 
 // Load devices

@@ -32,14 +32,6 @@ function checkAuthentication() {
     document.getElementById('goDevicesBtn').addEventListener('click', () => window.location.href = 'devices.html');
     document.getElementById('logoutBtn').addEventListener('click', logout);
 
-    if (role !== 'Administrator') {
-        const form = document.getElementById('cropForm');
-        form.querySelectorAll('input, button').forEach(element => {
-            if (element.id !== 'resetCropFormBtn') {
-                element.disabled = true;
-            }
-        });
-    }
 }
 
 function setupEventListeners() {
@@ -228,11 +220,6 @@ async function saveCrop(e) {
 
         if (response.status === 401) {
             logout();
-            return;
-        }
-
-        if (response.status === 403) {
-            showError('Chỉ quản trị viên mới có thể chỉnh sửa cây trồng');
             return;
         }
 

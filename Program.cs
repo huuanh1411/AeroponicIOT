@@ -1,4 +1,5 @@
 using AeroponicIOT.Data;
+using AeroponicIOT.Models;
 using AeroponicIOT.Services.Automation;
 using AeroponicIOT.Services.Mqtt;
 using AeroponicIOT.Services.Notifications;
@@ -160,14 +161,15 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     // Apply migrations on startup so the container can initialize schema automatically.
     try
     {
         dbContext.Database.Migrate();
+        await SeedDefaultCropsAsync(dbContext, logger);
     }
     catch (Exception ex)
     {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "An error occurred while migrating or initializing the database.");
         // Let the app continue to run; in container environments the DB may come up after the app.
     }
@@ -186,3 +188,58 @@ catch (Exception ex)
 }
 
 app.Run();
+
+static async Task SeedDefaultCropsAsync(ApplicationDbContext dbContext, ILogger logger)
+{
+    if (await dbContext.Crops.AnyAsync())
+    {
+        return;
+    }
+
+    var crops = new List<Crop>
+    {
+        new()
+        {
+            Name = "Lettuce",
+            Description = "Fast leafy green cycle for aeroponic production.",
+            TotalDaysEst = 45,
+            CreatedAt = DateTime.UtcNow,
+            CropStages = new List<CropStage>
+            {
+                new() { StageName = "Germination", DayStart = 1, DayEnd = 7, PhMin = 5.5m, PhMax = 6.2m, PpmMin = 350, PpmMax = 600, WaterTempMin = 18, WaterTempMax = 22, HumidityMin = 70, HumidityMax = 85, PumpOnMinutes = 3, PumpOffMinutes = 12 },
+                new() { StageName = "Vegetative", DayStart = 8, DayEnd = 30, PhMin = 5.8m, PhMax = 6.5m, PpmMin = 650, PpmMax = 950, WaterTempMin = 19, WaterTempMax = 23, HumidityMin = 60, HumidityMax = 75, PumpOnMinutes = 5, PumpOffMinutes = 10 },
+                new() { StageName = "Harvest", DayStart = 31, DayEnd = 45, PhMin = 5.8m, PhMax = 6.4m, PpmMin = 700, PpmMax = 900, WaterTempMin = 18, WaterTempMax = 22, HumidityMin = 55, HumidityMax = 70, PumpOnMinutes = 5, PumpOffMinutes = 8 }
+            }
+        },
+        new()
+        {
+            Name = "Basil",
+            Description = "Herb profile with warmer water and steady nutrient demand.",
+            TotalDaysEst = 60,
+            CreatedAt = DateTime.UtcNow,
+            CropStages = new List<CropStage>
+            {
+                new() { StageName = "Propagation", DayStart = 1, DayEnd = 10, PhMin = 5.6m, PhMax = 6.2m, PpmMin = 300, PpmMax = 500, WaterTempMin = 20, WaterTempMax = 24, HumidityMin = 70, HumidityMax = 85, PumpOnMinutes = 3, PumpOffMinutes = 12 },
+                new() { StageName = "Leaf Growth", DayStart = 11, DayEnd = 40, PhMin = 5.8m, PhMax = 6.4m, PpmMin = 700, PpmMax = 1100, WaterTempMin = 20, WaterTempMax = 25, HumidityMin = 60, HumidityMax = 75, PumpOnMinutes = 4, PumpOffMinutes = 9 },
+                new() { StageName = "Mature", DayStart = 41, DayEnd = 60, PhMin = 5.8m, PhMax = 6.3m, PpmMin = 900, PpmMax = 1200, WaterTempMin = 20, WaterTempMax = 24, HumidityMin = 55, HumidityMax = 70, PumpOnMinutes = 5, PumpOffMinutes = 8 }
+            }
+        },
+        new()
+        {
+            Name = "Strawberry",
+            Description = "Longer fruiting cycle with moderate nutrient and humidity targets.",
+            TotalDaysEst = 90,
+            CreatedAt = DateTime.UtcNow,
+            CropStages = new List<CropStage>
+            {
+                new() { StageName = "Establishment", DayStart = 1, DayEnd = 21, PhMin = 5.6m, PhMax = 6.0m, PpmMin = 500, PpmMax = 800, WaterTempMin = 18, WaterTempMax = 21, HumidityMin = 65, HumidityMax = 80, PumpOnMinutes = 4, PumpOffMinutes = 12 },
+                new() { StageName = "Flowering", DayStart = 22, DayEnd = 55, PhMin = 5.8m, PhMax = 6.2m, PpmMin = 900, PpmMax = 1200, WaterTempMin = 18, WaterTempMax = 22, HumidityMin = 60, HumidityMax = 75, PumpOnMinutes = 5, PumpOffMinutes = 10 },
+                new() { StageName = "Fruiting", DayStart = 56, DayEnd = 90, PhMin = 5.8m, PhMax = 6.3m, PpmMin = 1100, PpmMax = 1400, WaterTempMin = 17, WaterTempMax = 21, HumidityMin = 55, HumidityMax = 70, PumpOnMinutes = 5, PumpOffMinutes = 8 }
+            }
+        }
+    };
+
+    dbContext.Crops.AddRange(crops);
+    await dbContext.SaveChangesAsync();
+    logger.LogInformation("Seeded {CropCount} default crops", crops.Count);
+}

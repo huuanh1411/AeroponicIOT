@@ -40,6 +40,24 @@ public class Device
     [Column("crop_assigned_at")]
     public DateTime? CropAssignedAt { get; set; }
 
+    [Column("chip_id")]
+    [MaxLength(100)]
+    public string? ChipId { get; set; }
+
+    [Column("firmware_version")]
+    [MaxLength(50)]
+    public string? FirmwareVersion { get; set; }
+
+    [Column("provisioned_at")]
+    public DateTime? ProvisionedAt { get; set; }
+
+    [Column("claim_code")]
+    [MaxLength(16)]
+    public string? ClaimCode { get; set; }
+
+    [Column("claim_code_expires_at")]
+    public DateTime? ClaimCodeExpiresAt { get; set; }
+
     // For backward compatibility
     [NotMapped]
     public string Name => DeviceName ?? "Unknown Device";

@@ -93,7 +93,6 @@ public class CropController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> CreateCrop([FromBody] CropUpsertDto dto)
     {
         try
@@ -129,7 +128,6 @@ public class CropController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> UpdateCrop(int id, [FromBody] CropUpsertDto dto)
     {
         try
@@ -171,7 +169,6 @@ public class CropController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> DeleteCrop(int id)
     {
         try

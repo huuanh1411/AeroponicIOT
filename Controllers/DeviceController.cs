@@ -4,6 +4,7 @@ using AeroponicIOT.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 using System.Security.Claims;
 
 namespace AeroponicIOT.Controllers;
@@ -15,11 +16,13 @@ public class DeviceController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<DeviceController> _logger;
+    private readonly IConfiguration _configuration;
 
-    public DeviceController(ApplicationDbContext context, ILogger<DeviceController> logger)
+    public DeviceController(ApplicationDbContext context, ILogger<DeviceController> logger, IConfiguration configuration)
     {
         _context = context;
         _logger = logger;
+        _configuration = configuration;
     }
 
     private int GetCurrentUserId()
@@ -94,6 +97,229 @@ public class DeviceController : ControllerBase
         {
             _logger.LogError(ex, "Error getting devices");
             return StatusCode(500, new { detail = "Error retrieving devices" });
+        }
+    }
+
+    [HttpGet("pending")]
+    public async Task<IActionResult> GetPendingDevices()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var pendingDevices = await _context.Devices
+                .Where(d => d.UserId == null)
+                .OrderByDescending(d => d.LastSeen)
+                .Select(d => new PendingDeviceDto
+                {
+                    Id = d.Id,
+                    Name = d.DeviceName ?? "Pending Device",
+                    MacAddress = d.MacAddress,
+                    ChipId = d.ChipId,
+                    FirmwareVersion = d.FirmwareVersion,
+                    LastSeen = d.LastSeen,
+                    ProvisionedAt = d.ProvisionedAt
+                })
+                .ToListAsync();
+
+            _logger.LogInformation("User {UserId} retrieved {Count} pending devices", userId, pendingDevices.Count);
+            return Ok(pendingDevices);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized while getting pending devices");
+            return Unauthorized(new { detail = "User not authenticated" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving pending devices");
+            return StatusCode(500, new { detail = "Error retrieving pending devices" });
+        }
+    }
+
+    [HttpPost("self-register")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SelfRegister([FromBody] DeviceSelfRegisterRequestDto request)
+    {
+        try
+        {
+            var providedKey = Request.Headers["X-Device-Key"].FirstOrDefault();
+            var configuredKey = _configuration["Provisioning:SharedKey"];
+
+            if (string.IsNullOrWhiteSpace(configuredKey))
+            {
+                _logger.LogError("Provisioning:SharedKey is not configured");
+                return StatusCode(500, new { detail = "Provisioning key is not configured" });
+            }
+
+            if (string.IsNullOrWhiteSpace(providedKey) || !CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(providedKey), System.Text.Encoding.UTF8.GetBytes(configuredKey)))
+            {
+                _logger.LogWarning("Invalid provisioning key for self-register request");
+                return Unauthorized(new { detail = "Invalid provisioning key" });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.MacAddress) || !IsValidMacAddress(request.MacAddress))
+            {
+                return BadRequest(new { detail = "Invalid MAC address format" });
+            }
+
+            var normalizedMac = request.MacAddress.Trim().ToUpperInvariant();
+            var device = await _context.Devices.FirstOrDefaultAsync(d => d.MacAddress == normalizedMac);
+
+            if (device == null)
+            {
+                device = new Device
+                {
+                    DeviceName = string.IsNullOrWhiteSpace(request.DeviceName) ? "Pending Device" : request.DeviceName.Trim(),
+                    MacAddress = normalizedMac,
+                    ChipId = string.IsNullOrWhiteSpace(request.ChipId) ? null : request.ChipId.Trim(),
+                    FirmwareVersion = string.IsNullOrWhiteSpace(request.FirmwareVersion) ? null : request.FirmwareVersion.Trim(),
+                    Status = "Pending",
+                    CreatedAt = DateTime.UtcNow,
+                    LastSeen = DateTime.UtcNow,
+                    ProvisionedAt = DateTime.UtcNow
+                };
+
+                _context.Devices.Add(device);
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                device.LastSeen = DateTime.UtcNow;
+                device.ProvisionedAt ??= DateTime.UtcNow;
+                if (!string.IsNullOrWhiteSpace(request.DeviceName))
+                {
+                    device.DeviceName = request.DeviceName.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(request.ChipId))
+                {
+                    device.ChipId = request.ChipId.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(request.FirmwareVersion))
+                {
+                    device.FirmwareVersion = request.FirmwareVersion.Trim();
+                }
+            }
+
+            if (device.UserId != null)
+            {
+                device.Status = "Active";
+                await _context.SaveChangesAsync();
+
+                return Ok(new DeviceSelfRegisterResponseDto
+                {
+                    Success = true,
+                    DeviceId = device.Id,
+                    AlreadyClaimed = true,
+                    Message = "Device already claimed"
+                });
+            }
+
+            var claimCode = GenerateClaimCode();
+            var claimCodeMinutes = int.TryParse(_configuration["Provisioning:ClaimCodeMinutes"], out var configuredMinutes) ? configuredMinutes : 10;
+            device.ClaimCode = claimCode;
+            device.ClaimCodeExpiresAt = DateTime.UtcNow.AddMinutes(claimCodeMinutes);
+            device.Status = "Pending";
+
+            _context.Devices.Update(device);
+            await _context.SaveChangesAsync();
+
+            return Ok(new DeviceSelfRegisterResponseDto
+            {
+                Success = true,
+                DeviceId = device.Id,
+                AlreadyClaimed = false,
+                ClaimCode = device.ClaimCode,
+                ClaimCodeExpiresAt = device.ClaimCodeExpiresAt,
+                Message = "Device registered and waiting for claim"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during device self-registration");
+            return StatusCode(500, new { detail = "Error during self-registration" });
+        }
+    }
+
+    [HttpPost("claim")]
+    public async Task<IActionResult> ClaimDevice([FromBody] ClaimDeviceRequestDto request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+
+            if (string.IsNullOrWhiteSpace(request.ClaimCode))
+            {
+                return BadRequest(new { detail = "Claim code is required" });
+            }
+
+            var normalizedCode = request.ClaimCode.Trim().ToUpperInvariant();
+            var device = await _context.Devices
+                .FirstOrDefaultAsync(d => d.ClaimCode == normalizedCode && d.UserId == null);
+
+            if (device == null)
+            {
+                return NotFound(new { detail = "Claim code is invalid or device already claimed" });
+            }
+
+            if (!device.ClaimCodeExpiresAt.HasValue || device.ClaimCodeExpiresAt.Value < DateTime.UtcNow)
+            {
+                return BadRequest(new { detail = "Claim code has expired. Restart device provisioning to get a new code" });
+            }
+
+            if (request.CurrentCropId.HasValue)
+            {
+                var crop = await _context.Crops.FindAsync(request.CurrentCropId.Value);
+                if (crop == null)
+                {
+                    return BadRequest(new { detail = "Crop not found" });
+                }
+                device.CurrentCropId = request.CurrentCropId;
+                device.CropAssignedAt = DateTime.UtcNow;
+            }
+
+            if (request.GardenId.HasValue)
+            {
+                var garden = await _context.Gardens.FindAsync(request.GardenId.Value);
+                if (garden == null)
+                {
+                    return BadRequest(new { detail = "Garden not found" });
+                }
+                device.GardenId = request.GardenId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Name))
+            {
+                device.DeviceName = request.Name.Trim();
+            }
+
+            device.UserId = userId;
+            device.Status = "Active";
+            device.ClaimCode = null;
+            device.ClaimCodeExpiresAt = null;
+            device.LastSeen = DateTime.UtcNow;
+
+            _context.Devices.Update(device);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("User {UserId} claimed device {DeviceId} ({MacAddress})", userId, device.Id, device.MacAddress);
+
+            return Ok(new
+            {
+                detail = "Device claimed successfully",
+                deviceId = device.Id,
+                macAddress = device.MacAddress,
+                name = device.DeviceName
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized while claiming device");
+            return Unauthorized(new { detail = "User not authenticated" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while claiming device");
+            return StatusCode(500, new { detail = "Error claiming device" });
         }
     }
 
@@ -415,6 +641,19 @@ public class DeviceController : ControllerBase
         // Accept both colon and dash separated formats: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF
         var pattern = @"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$";
         return System.Text.RegularExpressions.Regex.IsMatch(macAddress, pattern);
+    }
+
+    private static string GenerateClaimCode()
+    {
+        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        Span<byte> bytes = stackalloc byte[8];
+        RandomNumberGenerator.Fill(bytes);
+        var chars = new char[6];
+        for (var i = 0; i < chars.Length; i++)
+        {
+            chars[i] = alphabet[bytes[i] % alphabet.Length];
+        }
+        return new string(chars);
     }
 
 
