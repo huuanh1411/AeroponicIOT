@@ -7,6 +7,8 @@ public class DeviceStatusDto
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string MacAddress { get; set; } = string.Empty;
+    public int? GardenId { get; set; }
+    public string? GardenName { get; set; }
     public bool IsActive { get; set; }
     public DateTime? LastSeen { get; set; }
     public string? CropName { get; set; }

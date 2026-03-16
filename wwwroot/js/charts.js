@@ -31,8 +31,8 @@ function checkAuthentication() {
     const chartsHeader = document.getElementById('chartsHeader');
     chartsHeader.innerHTML = `
         <span>${username} <small>(${role})</small></span>
-        <button id="backBtn" class="btn-secondary" onclick="goBack()">← Back to Dashboard</button>
-        <button id="logoutBtn" class="btn-secondary">Logout</button>
+        <button id="backBtn" class="btn-secondary" onclick="goBack()">← Về bảng điều khiển</button>
+        <button id="logoutBtn" class="btn-secondary">Đăng xuất</button>
     `;
     document.getElementById('logoutBtn').addEventListener('click', logout);
 }
@@ -58,11 +58,18 @@ async function loadDevices() {
             return;
         }
 
-        if (!response.ok) throw new Error('Failed to load devices');
+        if (!response.ok) throw new Error('Không thể tải danh sách thiết bị');
 
         const data = await response.json();
         const deviceSelect = document.getElementById('deviceSelect');
         deviceSelect.innerHTML = '';
+
+        if (!data.devices || data.devices.length === 0) {
+            deviceSelect.innerHTML = '<option value="">Chưa có thiết bị</option>';
+            clearChartsAndStats();
+            document.getElementById('alertsList').innerHTML = '<p>Chưa có thiết bị để hiển thị cảnh báo.</p>';
+            return;
+        }
 
         data.devices.forEach(device => {
             const option = document.createElement('option');
@@ -77,7 +84,7 @@ async function loadDevices() {
         }
     } catch (error) {
         console.error('Error loading devices:', error);
-        showError('Failed to load devices');
+        showError('Không thể tải danh sách thiết bị');
     }
 }
 
@@ -94,7 +101,7 @@ async function loadCharts() {
     const hours = document.getElementById('timeRange').value;
 
     if (!deviceId) {
-        showError('Please select a device');
+        showError('Vui lòng chọn thiết bị');
         return;
     }
 
@@ -108,26 +115,27 @@ async function loadCharts() {
             return;
         }
 
-        if (!response.ok) throw new Error('Failed to load chart data');
+        if (!response.ok) throw new Error('Không thể tải dữ liệu biểu đồ');
 
         const data = await response.json();
         renderCharts(data, hours);
         loadAlerts(deviceId);
     } catch (error) {
         console.error('Error loading chart data:', error);
-        showError('Failed to load chart data');
+        showError('Không thể tải dữ liệu biểu đồ');
     }
 }
 
 // Render charts
 function renderCharts(data, hours) {
     if (!data || data.length === 0) {
-        showError('No data available for selected time period');
+        clearChartsAndStats();
+        showError('Không có dữ liệu trong khoảng thời gian đã chọn');
         return;
     }
 
     // Prepare data
-    const labels = data.map(d => new Date(d.timestamp).toLocaleString('en-US', {
+    const labels = data.map(d => new Date(d.timestamp).toLocaleString('vi-VN', {
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
@@ -157,55 +165,55 @@ function renderCharts(data, hours) {
     };
 
     // pH Chart
-    renderChart('ph', 'pH Level', labels, [{
+    renderChart('ph', 'Mức pH', labels, [{
         label: 'pH',
         data: phData,
-        borderColor: '#667eea',
-        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+        borderColor: '#16a34a',
+        backgroundColor: 'rgba(22, 163, 74, 0.1)',
         borderWidth: 2,
         tension: 0.4,
         fill: true
     }], chartConfig);
 
     // TDS Chart
-    renderChart('tds', 'TDS Level', labels, [{
+    renderChart('tds', 'Mức TDS', labels, [{
         label: 'TDS (ppm)',
         data: tdsData,
-        borderColor: '#764ba2',
-        backgroundColor: 'rgba(118, 75, 162, 0.1)',
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
         borderWidth: 2,
         tension: 0.4,
         fill: true
     }], chartConfig);
 
     // Temperature Chart
-    renderChart('temp', 'Water Temperature', labels, [{
-        label: 'Temperature (°C)',
+    renderChart('temp', 'Nhiệt độ nước', labels, [{
+        label: 'Nhiệt độ (°C)',
         data: tempData,
-        borderColor: '#f093fb',
-        backgroundColor: 'rgba(240, 147, 251, 0.1)',
+        borderColor: '#65a30d',
+        backgroundColor: 'rgba(101, 163, 13, 0.1)',
         borderWidth: 2,
         tension: 0.4,
         fill: true
     }], chartConfig);
 
     // Humidity Chart
-    renderChart('humidity', 'Air Humidity', labels, [{
-        label: 'Humidity (%)',
+    renderChart('humidity', 'Độ ẩm không khí', labels, [{
+        label: 'Độ ẩm (%)',
         data: humidityData,
-        borderColor: '#4facfe',
-        backgroundColor: 'rgba(79, 172, 254, 0.1)',
+        borderColor: '#15803d',
+        backgroundColor: 'rgba(21, 128, 61, 0.1)',
         borderWidth: 2,
         tension: 0.4,
         fill: true
     }], chartConfig);
 
     // All Sensors Combined
-    renderChart('allSensors', 'All Sensor Parameters (Normalized)', labels, [
+    renderChart('allSensors', 'Tất cả thông số cảm biến (chuẩn hóa)', labels, [
         {
             label: 'pH',
             data: phData,
-            borderColor: '#667eea',
+            borderColor: '#16a34a',
             borderWidth: 2,
             tension: 0.4,
             yAxisID: 'y'
@@ -213,23 +221,23 @@ function renderCharts(data, hours) {
         {
             label: 'TDS',
             data: tdsData.map(v => v / 100), // Normalize to ~6-10 scale
-            borderColor: '#764ba2',
+            borderColor: '#22c55e',
             borderWidth: 2,
             tension: 0.4,
             yAxisID: 'y1'
         },
         {
-            label: 'Temp (°C)',
+            label: 'Nhiệt độ (°C)',
             data: tempData,
-            borderColor: '#f093fb',
+            borderColor: '#65a30d',
             borderWidth: 2,
             tension: 0.4,
             yAxisID: 'y2'
         },
         {
-            label: 'Humidity (%)',
+            label: 'Độ ẩm (%)',
             data: humidityData,
-            borderColor: '#4facfe',
+            borderColor: '#15803d',
             borderWidth: 2,
             tension: 0.4,
             yAxisID: 'y3'
@@ -257,12 +265,12 @@ function renderCharts(data, hours) {
             y2: {
                 type: 'linear',
                 position: 'right',
-                title: { display: true, text: 'Temperature (°C)' }
+                title: { display: true, text: 'Nhiệt độ (°C)' }
             },
             y3: {
                 type: 'linear',
                 position: 'right',
-                title: { display: true, text: 'Humidity (%)' }
+                title: { display: true, text: 'Độ ẩm (%)' }
             }
         }
     });
@@ -272,6 +280,22 @@ function renderCharts(data, hours) {
     displayStats('tds', tdsData);
     displayStats('temp', tempData);
     displayStats('humidity', humidityData);
+}
+
+function clearChartsAndStats() {
+    Object.keys(charts).forEach(key => {
+        if (charts[key]) {
+            charts[key].destroy();
+            charts[key] = null;
+        }
+    });
+
+    ['phStats', 'tdsStats', 'tempStats', 'humidityStats'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.innerHTML = '<div class="stat-item"><span>Chưa có dữ liệu</span></div>';
+        }
+    });
 }
 
 // Render individual chart
@@ -307,9 +331,9 @@ function displayStats(metric, data) {
     const statsEl = document.getElementById(metric + 'Stats');
     statsEl.innerHTML = `
         <div class="stat-item">
-            <span>Min: <strong>${min.toFixed(2)}</strong></span>
-            <span>Avg: <strong>${avg}</strong></span>
-            <span>Max: <strong>${max.toFixed(2)}</strong></span>
+            <span>Thấp nhất: <strong>${min.toFixed(2)}</strong></span>
+            <span>Trung bình: <strong>${avg}</strong></span>
+            <span>Cao nhất: <strong>${max.toFixed(2)}</strong></span>
         </div>
     `;
 }
@@ -321,13 +345,13 @@ async function loadAlerts(deviceId) {
             headers: getAuthHeaders()
         });
 
-        if (!response.ok) throw new Error('Failed to load alerts');
+        if (!response.ok) throw new Error('Không thể tải cảnh báo');
 
         const data = await response.json();
         const alertsList = document.getElementById('alertsList');
         
         if (data.activeAlerts.length === 0) {
-            alertsList.innerHTML = '<p class="no-alerts">No active alerts 🎉</p>';
+            alertsList.innerHTML = '<p class="no-alerts">Không có cảnh báo đang hoạt động 🎉</p>';
             return;
         }
 
@@ -335,7 +359,7 @@ async function loadAlerts(deviceId) {
         data.activeAlerts.slice(0, 10).forEach(alert => {
             const alertItem = document.createElement('div');
             alertItem.className = 'alert-item';
-            const timestamp = new Date(alert.timestamp).toLocaleString();
+            const timestamp = new Date(alert.timestamp).toLocaleString('vi-VN');
             let className = 'alert-info';
             if (alert.type === 1) className = 'alert-warning';
             if (alert.type === 2) className = 'alert-error';

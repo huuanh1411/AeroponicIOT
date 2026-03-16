@@ -1,5 +1,18 @@
 const HEALTH_URL = '/health';
 
+function toVietnameseHealthStatus(value) {
+    const map = {
+        Healthy: 'Khỏe',
+        Unhealthy: 'Không khỏe',
+        Degraded: 'Suy giảm',
+        Connected: 'Đã kết nối',
+        Disconnected: 'Mất kết nối',
+        Running: 'Đang chạy',
+        Stopped: 'Đã dừng'
+    };
+    return map[value] || value;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadHealth();
     // Auto-refresh every 10 seconds
@@ -28,30 +41,30 @@ async function loadHealth() {
 
         const ok = response.ok;
 
-        statusEl.textContent = data.status || (ok ? 'Unknown' : 'Unhealthy');
-        dbEl.textContent = data.db || 'Unknown';
-        mqttEl.textContent = data.mqtt || 'Unknown';
+        statusEl.textContent = toVietnameseHealthStatus(data.status) || (ok ? 'Không rõ' : 'Không khỏe');
+        dbEl.textContent = toVietnameseHealthStatus(data.db) || 'Không rõ';
+        mqttEl.textContent = toVietnameseHealthStatus(data.mqtt) || 'Không rõ';
 
         if (data.timestamp) {
-            tsEl.textContent = new Date(data.timestamp).toLocaleString();
+            tsEl.textContent = new Date(data.timestamp).toLocaleString('vi-VN');
         } else {
-            tsEl.textContent = 'Unknown';
+            tsEl.textContent = 'Không rõ';
         }
 
-        lastCheckedEl.textContent = `Last checked: ${new Date().toLocaleString()}`;
-        rawEl.textContent = text || '(empty response body)';
+        lastCheckedEl.textContent = `Lần kiểm tra cuối: ${new Date().toLocaleString('vi-VN')}`;
+        rawEl.textContent = text || '(phản hồi rỗng)';
 
         // Simple coloring based on status
         statusEl.style.color = ok && data.status === 'Healthy' ? '#4CAF50' : '#f44336';
-        dbEl.style.color = (data.db === 'Connected') ? '#4CAF50' : '#f44336';
-        mqttEl.style.color = (data.mqtt === 'Running') ? '#4CAF50' : '#f44336';
+        dbEl.style.color = data.db === 'Connected' ? '#4CAF50' : '#f44336';
+        mqttEl.style.color = data.mqtt === 'Running' ? '#4CAF50' : '#f44336';
     } catch (err) {
-        statusEl.textContent = 'Unreachable';
-        dbEl.textContent = 'Unknown';
-        mqttEl.textContent = 'Unknown';
-        tsEl.textContent = 'Unknown';
-        lastCheckedEl.textContent = `Last checked: ${new Date().toLocaleString()}`;
-        rawEl.textContent = `Request failed: ${err}`;
+        statusEl.textContent = 'Không thể kết nối';
+        dbEl.textContent = 'Không rõ';
+        mqttEl.textContent = 'Không rõ';
+        tsEl.textContent = 'Không rõ';
+        lastCheckedEl.textContent = `Lần kiểm tra cuối: ${new Date().toLocaleString('vi-VN')}`;
+        rawEl.textContent = `Yêu cầu thất bại: ${err}`;
 
         statusEl.style.color = '#f44336';
         dbEl.style.color = '#f44336';

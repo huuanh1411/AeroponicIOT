@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Health - Smart Farm IoT</title>
-    <link rel="stylesheet" href="css/dashboard.css">
+    <title>Sức khỏe hệ thống - Smart Farm IoT</title>
+    <link rel="stylesheet" href="css/dashboard.css?v=20260306">
 </head>
 <body>
     <header>
-        <h1>System Health</h1>
+        <h1>Sức khỏe hệ thống</h1>
         <div class="header-controls">
-            <button class="btn-primary" onclick="goBackToDashboard()">← Back to Dashboard</button>
-            <span id="healthLastChecked">Last checked: Never</span>
+            <button class="btn-primary btn-soft-green" onclick="goBackToDashboard()">← Về bảng điều khiển</button>
+            <span id="healthLastChecked">Lần kiểm tra cuối: Chưa bao giờ</span>
         </div>
     </header>
 
     <main>
         <section class="card">
-            <h2>Overall Status</h2>
+            <h2>Trạng thái tổng quan</h2>
             <div class="stats-grid">
                 <div class="stat-item">
-                    <span class="stat-label">Overall</span>
+                    <span class="stat-label">Tổng quan</span>
                     <span id="healthStatus" class="stat-value">--</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">Database</span>
+                    <span class="stat-label">Cơ sở dữ liệu</span>
                     <span id="dbStatus" class="stat-value">--</span>
                 </div>
                 <div class="stat-item">
@@ -32,13 +32,13 @@
                     <span id="mqttStatus" class="stat-value">--</span>
                 </div>
             </div>
-            <p style="margin-top:1rem;">Last successful response: <span id="healthTimestamp">Never</span></p>
-            <button class="btn-primary" onclick="loadHealth()">Refresh Now</button>
+            <p style="margin-top:1rem;">Phản hồi thành công cuối: <span id="healthTimestamp">Chưa bao giờ</span></p>
+            <button class="btn-primary" onclick="loadHealth()">Làm mới ngay</button>
         </section>
 
         <section class="card">
-            <h2>Details</h2>
-            <pre id="healthRaw" style="background:#f8f9fa;padding:1rem;border-radius:4px;overflow:auto;max-height:300px;">No data yet.</pre>
+            <h2>Chi tiết</h2>
+            <pre id="healthRaw" style="background:#f8f9fa;padding:1rem;border-radius:4px;overflow:auto;max-height:300px;">Chưa có dữ liệu.</pre>
         </section>
     </main>
 

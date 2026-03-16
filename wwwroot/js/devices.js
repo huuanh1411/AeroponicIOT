@@ -2,12 +2,23 @@
 const API_BASE = window.API_BASE || (window.location.origin + '/api');
 let devices = [];
 let crops = [];
+let gardens = [];
 let editingDeviceId = null;
+
+function toVietnameseDeviceStatus(status) {
+    const map = {
+        Active: 'Hoạt động',
+        Inactive: 'Ngừng hoạt động',
+        Maintenance: 'Bảo trì'
+    };
+    return map[status] || status || 'Không rõ';
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthentication();
     loadCrops();
+    loadGardens();
     loadDevices();
     setupEventListeners();
 });
@@ -25,8 +36,8 @@ function checkAuthentication() {
     const header = document.getElementById('devicesHeader');
     header.innerHTML = `
         <span>${username} <small>(${role})</small></span>
-        <button id="backBtn" class="btn-secondary" onclick="goBack()">← Back to Dashboard</button>
-        <button id="logoutBtn" class="btn-secondary">Logout</button>
+        <button id="backBtn" class="btn-secondary" onclick="goBack()">← Về bảng điều khiển</button>
+        <button id="logoutBtn" class="btn-secondary">Đăng xuất</button>
     `;
     document.getElementById('logoutBtn').addEventListener('click', logout);
 }
@@ -58,12 +69,32 @@ async function loadCrops() {
             return;
         }
 
-        if (!response.ok) throw new Error('Failed to load crops');
+        if (!response.ok) throw new Error('Không thể tải danh sách cây trồng');
 
         crops = await response.json();
         populateCropSelects();
     } catch (error) {
         console.error('Error loading crops:', error);
+    }
+}
+
+async function loadGardens() {
+    try {
+        const response = await fetch(`${API_BASE}/garden`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+
+        if (!response.ok) throw new Error('Không thể tải danh sách khu vườn');
+
+        gardens = await response.json();
+        populateGardenSelects();
+    } catch (error) {
+        console.error('Error loading gardens:', error);
     }
 }
 
@@ -73,11 +104,26 @@ function populateCropSelects() {
     const select2 = document.getElementById('editCropSelect');
 
     [select1, select2].forEach(select => {
-        select.innerHTML = '<option value="">No Crop Assigned</option>';
+        select.innerHTML = '<option value="">Chưa gán cây trồng</option>';
         crops.forEach(crop => {
             const option = document.createElement('option');
             option.value = crop.id;
             option.textContent = crop.name;
+            select.appendChild(option);
+        });
+    });
+}
+
+function populateGardenSelects() {
+    const select1 = document.getElementById('gardenSelect');
+    const select2 = document.getElementById('editGardenSelect');
+
+    [select1, select2].forEach(select => {
+        select.innerHTML = '<option value="">Chưa gán khu vườn</option>';
+        gardens.forEach(garden => {
+            const option = document.createElement('option');
+            option.value = garden.id;
+            option.textContent = garden.name;
             select.appendChild(option);
         });
     });
@@ -95,13 +141,13 @@ async function loadDevices() {
             return;
         }
 
-        if (!response.ok) throw new Error('Failed to load devices');
+        if (!response.ok) throw new Error('Không thể tải danh sách thiết bị');
 
         devices = await response.json();
         displayDevices();
     } catch (error) {
         console.error('Error loading devices:', error);
-        showError('Failed to load devices');
+        showError('Không thể tải danh sách thiết bị');
     }
 }
 
@@ -113,7 +159,7 @@ function displayDevices() {
     // Active devices
     const grid = document.getElementById('devicesGrid');
     if (activeDevices.length === 0) {
-        grid.innerHTML = '<p class="no-devices">No active devices. Create one to get started!</p>';
+        grid.innerHTML = '<p class="no-devices">Không có thiết bị đang hoạt động. Hãy tạo mới thiết bị!</p>';
     } else {
         grid.innerHTML = '';
         activeDevices.forEach(device => {
@@ -124,7 +170,7 @@ function displayDevices() {
     // Inactive devices
     const inactiveGrid = document.getElementById('inactiveDevicesGrid');
     if (inactiveDevices.length === 0) {
-        inactiveGrid.innerHTML = '<p class="no-devices">No inactive devices</p>';
+        inactiveGrid.innerHTML = '<p class="no-devices">Không có thiết bị ngừng hoạt động</p>';
     } else {
         inactiveGrid.innerHTML = '';
         inactiveDevices.forEach(device => {
@@ -139,41 +185,46 @@ function createDeviceCard(device, isInactive = false) {
     card.className = 'device-card';
     if (isInactive) card.classList.add('inactive');
 
-    const lastSeen = device.lastSeen ? new Date(device.lastSeen).toLocaleString() : 'Never';
-    const createdAt = device.createdAt ? new Date(device.createdAt).toLocaleDateString() : 'Unknown';
-    const cropDisplay = device.cropName || 'Not assigned';
+    const lastSeen = device.lastSeen ? new Date(device.lastSeen).toLocaleString('vi-VN') : 'Chưa bao giờ';
+    const createdAt = device.createdAt ? new Date(device.createdAt).toLocaleDateString('vi-VN') : 'Không rõ';
+    const cropDisplay = device.cropName || 'Chưa gán';
+    const gardenDisplay = device.gardenName || 'Chưa gán';
     const statusClass = device.isActive ? 'active' : 'inactive';
 
     card.innerHTML = `
         <div class="card-header">
             <h3>${device.name}</h3>
-            <span class="status-badge ${statusClass}">${device.isActive ? '🟢 Active' : '🔴 Inactive'}</span>
+            <span class="status-badge ${statusClass}">${device.isActive ? '🟢 Hoạt động' : '🔴 Ngừng hoạt động'}</span>
         </div>
         <div class="card-details">
             <div class="detail-row">
-                <span class="label">MAC Address:</span>
+                <span class="label">Địa chỉ MAC:</span>
                 <span class="value mac">${device.macAddress}</span>
             </div>
             <div class="detail-row">
-                <span class="label">Crop:</span>
+                <span class="label">Cây trồng:</span>
                 <span class="value">${cropDisplay}</span>
             </div>
             <div class="detail-row">
-                <span class="label">Status:</span>
-                <span class="value">${device.status || 'Unknown'}</span>
+                <span class="label">Khu vườn:</span>
+                <span class="value">${gardenDisplay}</span>
             </div>
             <div class="detail-row">
-                <span class="label">Created:</span>
+                <span class="label">Trạng thái:</span>
+                <span class="value">${toVietnameseDeviceStatus(device.status)}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Ngày tạo:</span>
                 <span class="value">${createdAt}</span>
             </div>
             <div class="detail-row">
-                <span class="label">Last Seen:</span>
+                <span class="label">Lần cuối online:</span>
                 <span class="value">${lastSeen}</span>
             </div>
         </div>
         <div class="card-actions">
-            <button class="btn-small edit" onclick="openEditModal(${device.id})">✏️ Edit</button>
-            <button class="btn-small delete" onclick="deleteDevice(${device.id})">🗑️ Delete</button>
+            <button class="btn-small edit" onclick="openEditModal(${device.id})">✏️ Sửa</button>
+            <button class="btn-small delete" onclick="deleteDevice(${device.id})">🗑️ Xóa</button>
         </div>
     `;
 
@@ -188,12 +239,14 @@ async function createDevice(e) {
         name: document.getElementById('deviceName').value,
         macAddress: document.getElementById('macAddress').value,
         currentCropId: document.getElementById('cropSelect').value ? 
-            parseInt(document.getElementById('cropSelect').value) : null
+            parseInt(document.getElementById('cropSelect').value) : null,
+        gardenId: document.getElementById('gardenSelect').value ?
+            parseInt(document.getElementById('gardenSelect').value) : null
     };
 
     // Validate MAC address format
     if (!/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(deviceData.macAddress)) {
-        showError('Invalid MAC address format (use AA:BB:CC:DD:EE:FF)');
+        showError('Định dạng MAC không hợp lệ (dùng AA:BB:CC:DD:EE:FF)');
         return;
     }
 
@@ -211,15 +264,15 @@ async function createDevice(e) {
 
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.detail || 'Failed to create device');
+            throw new Error(error.detail || 'Không thể tạo thiết bị');
         }
 
-        showSuccess('Device created successfully!');
+        showSuccess('Tạo thiết bị thành công!');
         document.getElementById('addDeviceForm').reset();
         loadDevices();
     } catch (error) {
         console.error('Error creating device:', error);
-        showError(error.message || 'Failed to create device');
+        showError(error.message || 'Không thể tạo thiết bị');
     }
 }
 
@@ -232,7 +285,8 @@ async function openEditModal(deviceId) {
     document.getElementById('editDeviceId').value = deviceId;
     document.getElementById('editDeviceName').value = device.name;
     document.getElementById('editCropSelect').value = device.currentCropId || '';
-    document.getElementById('editStatus').value = device.status || 'active';
+    document.getElementById('editGardenSelect').value = device.gardenId || '';
+    document.getElementById('editStatus').value = device.status || 'Active';
 
     document.getElementById('editModal').style.display = 'flex';
 }
@@ -252,6 +306,8 @@ async function updateDevice(e) {
         name: document.getElementById('editDeviceName').value,
         currentCropId: document.getElementById('editCropSelect').value ? 
             parseInt(document.getElementById('editCropSelect').value) : null,
+        gardenId: document.getElementById('editGardenSelect').value ?
+            parseInt(document.getElementById('editGardenSelect').value) : null,
         status: document.getElementById('editStatus').value
     };
 
@@ -267,14 +323,14 @@ async function updateDevice(e) {
             return;
         }
 
-        if (!response.ok) throw new Error('Failed to update device');
+        if (!response.ok) throw new Error('Không thể cập nhật thiết bị');
 
-        showSuccess('Device updated successfully!');
+        showSuccess('Cập nhật thiết bị thành công!');
         closeEditModal();
         loadDevices();
     } catch (error) {
         console.error('Error updating device:', error);
-        showError('Failed to update device');
+        showError('Không thể cập nhật thiết bị');
     }
 }
 
@@ -283,7 +339,7 @@ async function deleteDevice(deviceId) {
     const device = devices.find(d => d.id === deviceId);
     if (!device) return;
 
-    if (!confirm(`Delete device "${device.name}"? This cannot be undone.`)) {
+    if (!confirm(`Bạn có chắc chắn muốn xóa thiết bị "${device.name}"? Không thể hoàn tác.`)) {
         return;
     }
 
@@ -298,13 +354,13 @@ async function deleteDevice(deviceId) {
             return;
         }
 
-        if (!response.ok) throw new Error('Failed to delete device');
+        if (!response.ok) throw new Error('Không thể xóa thiết bị');
 
-        showSuccess('Device deleted successfully');
+        showSuccess('Đã xóa thiết bị thành công');
         loadDevices();
     } catch (error) {
         console.error('Error deleting device:', error);
-        showError('Failed to delete device');
+        showError('Không thể xóa thiết bị');
     }
 }
 

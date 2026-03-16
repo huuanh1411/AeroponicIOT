@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analytics - Smart Farm IoT</title>
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/charts.css">
+    <title>Phân tích - Smart Farm IoT</title>
+    <link rel="stylesheet" href="css/dashboard.css?v=20260306">
+    <link rel="stylesheet" href="css/charts.css?v=20260306">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
-        <h1>📊 Smart Farm Analytics</h1>
+        <h1>📊 Phân tích Smart Farm</h1>
         <div class="header-controls">
             <div id="chartsHeader"></div>
         </div>
@@ -19,31 +19,31 @@
     <main class="analytics-container">
         <div class="filters-section">
             <div class="filter-group">
-                <label for="deviceSelect">Select Device:</label>
+                <label for="deviceSelect">Chọn thiết bị:</label>
                 <select id="deviceSelect">
-                    <option value="">Loading devices...</option>
+                    <option value="">Đang tải thiết bị...</option>
                 </select>
             </div>
 
             <div class="filter-group">
-                <label for="timeRange">Time Range:</label>
+                <label for="timeRange">Khoảng thời gian:</label>
                 <select id="timeRange">
-                    <option value="24">Last 24 Hours</option>
-                    <option value="72">Last 3 Days</option>
-                    <option value="168">Last 7 Days</option>
-                    <option value="720">Last 30 Days</option>
+                    <option value="24">24 giờ gần nhất</option>
+                    <option value="72">3 ngày gần nhất</option>
+                    <option value="168">7 ngày gần nhất</option>
+                    <option value="720">30 ngày gần nhất</option>
                 </select>
             </div>
 
             <div class="filter-group">
-                <button id="refreshChartsBtn" class="btn-primary">🔄 Refresh</button>
+                <button id="refreshChartsBtn" class="btn-primary">🔄 Làm mới</button>
             </div>
         </div>
 
         <div class="charts-grid">
             <div class="chart-container">
                 <div class="chart-header">
-                    <h3>pH Level Trend</h3>
+                    <h3>Xu hướng pH</h3>
                     <span class="chart-unit">pH</span>
                 </div>
                 <canvas id="phChart"></canvas>
@@ -52,7 +52,7 @@
 
             <div class="chart-container">
                 <div class="chart-header">
-                    <h3>TDS (Nutrient) Level</h3>
+                    <h3>Mức TDS (dinh dưỡng)</h3>
                     <span class="chart-unit">ppm</span>
                 </div>
                 <canvas id="tdsChart"></canvas>
@@ -61,7 +61,7 @@
 
             <div class="chart-container">
                 <div class="chart-header">
-                    <h3>Water Temperature</h3>
+                    <h3>Nhiệt độ nước</h3>
                     <span class="chart-unit">°C</span>
                 </div>
                 <canvas id="tempChart"></canvas>
@@ -70,7 +70,7 @@
 
             <div class="chart-container">
                 <div class="chart-header">
-                    <h3>Air Humidity</h3>
+                    <h3>Độ ẩm không khí</h3>
                     <span class="chart-unit">%</span>
                 </div>
                 <canvas id="humidityChart"></canvas>
@@ -81,16 +81,16 @@
         <div class="comparison-section">
             <div class="chart-container full-width">
                 <div class="chart-header">
-                    <h3>All Sensor Parameters</h3>
+                    <h3>Tất cả thông số cảm biến</h3>
                 </div>
                 <canvas id="allSensorsChart"></canvas>
             </div>
         </div>
 
         <div class="alerts-section">
-            <h2>Recent Alerts & Events</h2>
+            <h2>Cảnh báo và sự kiện gần đây</h2>
             <div id="alertsList" class="alerts-list">
-                <p>Loading alerts...</p>
+                <p>Đang tải cảnh báo...</p>
             </div>
         </div>
     </main>

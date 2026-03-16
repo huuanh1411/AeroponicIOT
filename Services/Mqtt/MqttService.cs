@@ -49,25 +49,6 @@ public class MqttService : IMqttService, IDisposable
             // If MQTT username/password are configured, enforce connection authentication
             var mqttUser = _configuration["MqttSettings:Username"]; 
             var mqttPassword = _configuration["MqttSettings:Password"];
-            if (!string.IsNullOrWhiteSpace(mqttUser) && !string.IsNullOrWhiteSpace(mqttPassword))
-            {
-                optionsBuilder = optionsBuilder.WithConnectionValidator(context =>
-                {
-                    if (string.IsNullOrWhiteSpace(context.Username) || string.IsNullOrWhiteSpace(context.Password))
-                    {
-                        context.ReasonCode = MQTTnet.Protocol.MqttConnectReasonCode.BadUserNameOrPassword;
-                        return;
-                    }
-
-                    if (context.Username != mqttUser || context.Password != mqttPassword)
-                    {
-                        context.ReasonCode = MQTTnet.Protocol.MqttConnectReasonCode.BadUserNameOrPassword;
-                        return;
-                    }
-
-                    context.ReasonCode = MQTTnet.Protocol.MqttConnectReasonCode.Success;
-                });
-            }
 
             var options = optionsBuilder.Build();
 
@@ -87,6 +68,29 @@ public class MqttService : IMqttService, IDisposable
                 _logger.LogInformation("MQTT Client disconnected: {ClientId}", e.ClientId);
                 await Task.CompletedTask;
             };
+
+            if (!string.IsNullOrWhiteSpace(mqttUser) && !string.IsNullOrWhiteSpace(mqttPassword))
+            {
+                _mqttServer.ValidatingConnectionAsync += async e =>
+                {
+                    if (string.IsNullOrWhiteSpace(e.UserName) || string.IsNullOrWhiteSpace(e.Password))
+                    {
+                        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+                        await Task.CompletedTask;
+                        return;
+                    }
+
+                    if (e.UserName != mqttUser || e.Password != mqttPassword)
+                    {
+                        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+                        await Task.CompletedTask;
+                        return;
+                    }
+
+                    e.ReasonCode = MqttConnectReasonCode.Success;
+                    await Task.CompletedTask;
+                };
+            }
 
             // Handle incoming published messages (for sensor data ingestion)
             _mqttServer.InterceptingPublishAsync += OnInterceptingPublishAsync;

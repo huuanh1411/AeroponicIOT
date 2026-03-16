@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - AeroponicIOT</title>
+    <title>Đăng ký - AeroponicIOT</title>
     <link rel="stylesheet" href="css/register.css">
 </head>
 
@@ -13,40 +13,40 @@
         <div class="register-card">
             <div class="register-header">
                 <h1>AeroponicIOT</h1>
-                <p>Create Your Account</p>
+                <p>Tạo tài khoản mới</p>
             </div>
 
             <form id="registerForm" class="register-form">
                 <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required placeholder="Enter your username">
+                    <label for="username">Tên đăng nhập</label>
+                    <input type="text" id="username" name="username" required placeholder="Nhập tên đăng nhập">
                     <span class="error-message" id="usernameError"></span>
                 </div>
 
                 <div class="form-group">
                     <label for="email">Email</label>
-                    <input type="email" id="email" name="email" required placeholder="Enter your email">
+                    <input type="email" id="email" name="email" required placeholder="Nhập email">
                     <span class="error-message" id="emailError"></span>
                 </div>
 
                 <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required placeholder="Enter your password">
+                    <label for="password">Mật khẩu</label>
+                    <input type="password" id="password" name="password" required placeholder="Nhập mật khẩu">
                     <span class="error-message" id="passwordError"></span>
                 </div>
 
                 <div class="form-group">
-                    <label for="confirmPassword">Confirm Password</label>
+                    <label for="confirmPassword">Xác nhận mật khẩu</label>
                     <input type="password" id="confirmPassword" name="confirmPassword" required
-                        placeholder="Confirm your password">
+                        placeholder="Nhập lại mật khẩu">
                     <span class="error-message" id="confirmPasswordError"></span>
                 </div>
 
                 <div class="form-group">
-                    <label for="role">Role</label>
+                    <label for="role">Vai trò</label>
                     <select id="role" name="role" required>
-                        <option value="">Select a role</option>
-                        <option value="Farmer">Farmer</option>
+                        <option value="">Chọn vai trò</option>
+                        <option value="Farmer">Nông dân</option>
                         <option value="Admin">Admin</option>
                     </select>
                     <span class="error-message" id="roleError"></span>
@@ -60,11 +60,11 @@
                     <span id="errorText"></span>
                 </div>
 
-                <button type="submit" class="btn-register">Register</button>
+                <button type="submit" class="btn-register">Đăng ký</button>
             </form>
 
             <div class="register-footer">
-                <p>Already have an account? <a href="login.html">Login here</a></p>
+                <p>Đã có tài khoản? <a href="login.html">Đăng nhập tại đây</a></p>
             </div>
         </div>
     </div>
@@ -89,34 +89,34 @@
             let isValid = true;
 
             if (!username || username.length < 3) {
-                showError('usernameError', 'Username must be at least 3 characters');
+                showError('usernameError', 'Tên đăng nhập phải có ít nhất 3 ký tự');
                 isValid = false;
             }
 
             if (!email || !isValidEmail(email)) {
-                showError('emailError', 'Please enter a valid email address');
+                showError('emailError', 'Vui lòng nhập địa chỉ email hợp lệ');
                 isValid = false;
             }
 
             if (!password || password.length < 6) {
-                showError('passwordError', 'Password must be at least 6 characters');
+                showError('passwordError', 'Mật khẩu phải có ít nhất 6 ký tự');
                 isValid = false;
             }
 
             if (password !== confirmPassword) {
-                showError('confirmPasswordError', 'Passwords do not match');
+                showError('confirmPasswordError', 'Mật khẩu xác nhận không khớp');
                 isValid = false;
             }
 
             if (!role) {
-                showError('roleError', 'Please select a role');
+                showError('roleError', 'Vui lòng chọn vai trò');
                 isValid = false;
             }
 
             if (!isValid) return;
 
             try {
-                const response = await fetch('/api/authentication/register', {
+                const response = await fetch(`${window.location.origin}/api/authentication/register`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -132,7 +132,7 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    document.getElementById('successText').textContent = data.message || 'Registration successful! Redirecting to login...';
+                    document.getElementById('successText').textContent = data.message || 'Đăng ký thành công! Đang chuyển sang trang đăng nhập...';
                     document.getElementById('successMessage').style.display = 'block';
                     document.getElementById('registerForm').reset();
 
@@ -141,12 +141,12 @@
                         window.location.href = 'login.html';
                     }, 2000);
                 } else {
-                    document.getElementById('errorText').textContent = data.message || 'Registration failed. Please try again.';
+                    document.getElementById('errorText').textContent = data.message || 'Đăng ký thất bại. Vui lòng thử lại.';
                     document.getElementById('errorMessage').style.display = 'block';
                 }
             } catch (error) {
                 console.error('Registration error:', error);
-                document.getElementById('errorText').textContent = 'An error occurred. Please try again.';
+                document.getElementById('errorText').textContent = 'Đã xảy ra lỗi. Vui lòng thử lại.';
                 document.getElementById('errorMessage').style.display = 'block';
             }
         });

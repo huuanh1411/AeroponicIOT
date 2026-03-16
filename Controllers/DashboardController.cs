@@ -4,6 +4,7 @@ using AeroponicIOT.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace AeroponicIOT.Controllers;
 
@@ -22,12 +23,12 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("latest")]
-    public async Task<IActionResult> GetLatestData()
+    public async Task<IActionResult> GetLatestData([FromQuery] int? gardenId = null)
     {
         try
         {
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
             IQueryable<Device> devicesQuery;
             if (userRole == "Administrator")
@@ -43,14 +44,30 @@ public class DashboardController : ControllerBase
                 return Unauthorized();
             }
 
-            var devices = await devicesQuery
+            devicesQuery = devicesQuery
                 .Include(d => d.Crop)
+                .Include(d => d.Garden)
                 .Include(d => d.SensorLogs.OrderByDescending(sl => sl.Timestamp).Take(1))
-                .ToListAsync();
+                .AsQueryable();
 
-            var activeAlerts = await _context.Alerts
-                .Where(a => a.Status == Models.AlertStatus.Active)
+            if (gardenId.HasValue)
+            {
+                devicesQuery = devicesQuery.Where(d => d.GardenId == gardenId.Value);
+            }
+
+            var devices = await devicesQuery.ToListAsync();
+
+            var activeAlertsQuery = _context.Alerts
+                .Where(a => !a.IsResolved)
                 .Include(a => a.Device)
+                .AsQueryable();
+
+            if (gardenId.HasValue)
+            {
+                activeAlertsQuery = activeAlertsQuery.Where(a => a.Device != null && a.Device.GardenId == gardenId.Value);
+            }
+
+            var activeAlerts = await activeAlertsQuery
                 .OrderByDescending(a => a.Timestamp)
                 .Take(10)
                 .ToListAsync();
@@ -60,6 +77,8 @@ public class DashboardController : ControllerBase
                 Id = d.Id,
                 Name = d.Name,
                 MacAddress = d.MacAddress,
+                GardenId = d.GardenId,
+                GardenName = d.Garden?.Name,
                 IsActive = d.IsActive,
                 LastSeen = d.LastSeen,
                 CropName = d.Crop?.Name,
@@ -69,7 +88,8 @@ public class DashboardController : ControllerBase
                     Ph = (double?)d.SensorLogs.First().Ph,
                     Tds = d.SensorLogs.First().Tds,
                     WaterTemperature = d.SensorLogs.First().WaterTemperature,
-                    AirHumidity = d.SensorLogs.First().AirHumidity
+                    AirHumidity = d.SensorLogs.First().AirHumidity,
+                    LightIntensity = d.SensorLogs.First().LightIntensity
                 } : null
             }).ToList();
 
@@ -94,8 +114,9 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetKeyPerformanceIndicators()
     {
         try
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
             // Get user's devices or all if admin
             IQueryable<Device> devicesQuery;
@@ -150,7 +171,7 @@ public class DashboardController : ControllerBase
 
             // Check for critical alerts
             var criticalAlerts = await _context.Alerts
-                .Where(a => a.Status == Models.AlertStatus.Active)
+                .Where(a => !a.IsResolved)
                 .CountAsync();
 
             // Adjust health based on alerts
@@ -184,8 +205,9 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetDeviceHealth()
     {
         try
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
             // Get user's devices
             IQueryable<Device> devicesQuery;
@@ -258,8 +280,8 @@ public class DashboardController : ControllerBase
             var cutoffTime = DateTime.UtcNow.AddHours(-hours);
 
             // Ensure the requesting user owns the device or is an admin
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
             var device = await _context.Devices.FindAsync(deviceId);
             if (device == null)

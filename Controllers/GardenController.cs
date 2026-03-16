@@ -83,7 +83,6 @@ public class GardenController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> CreateGarden([FromBody] GardenDto dto)
     {
         try
