@@ -26,7 +26,24 @@ public class DashboardController : ControllerBase
     {
         try
         {
-            var devices = await _context.Devices
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            IQueryable<Device> devicesQuery;
+            if (userRole == "Administrator")
+            {
+                devicesQuery = _context.Devices;
+            }
+            else if (int.TryParse(userIdClaim, out var userIdInt))
+            {
+                devicesQuery = _context.Devices.Where(d => d.UserId == userIdInt);
+            }
+            else
+            {
+                return Unauthorized();
+            }
+
+            var devices = await devicesQuery
                 .Include(d => d.Crop)
                 .Include(d => d.SensorLogs.OrderByDescending(sl => sl.Timestamp).Take(1))
                 .ToListAsync();
@@ -77,9 +94,8 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetKeyPerformanceIndicators()
     {
         try
-        {
-            var userId = User.FindFirst("sub")?.Value;
-            var userRole = User.FindFirst("role")?.Value;
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
 
             // Get user's devices or all if admin
             IQueryable<Device> devicesQuery;
@@ -87,7 +103,7 @@ public class DashboardController : ControllerBase
             {
                 devicesQuery = _context.Devices;
             }
-            else if (int.TryParse(userId, out var userIdInt))
+            else if (int.TryParse(userIdClaim, out var userIdInt))
             {
                 devicesQuery = _context.Devices.Where(d => d.UserId == userIdInt);
             }
@@ -168,9 +184,8 @@ public class DashboardController : ControllerBase
     public async Task<IActionResult> GetDeviceHealth()
     {
         try
-        {
-            var userId = User.FindFirst("sub")?.Value;
-            var userRole = User.FindFirst("role")?.Value;
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
 
             // Get user's devices
             IQueryable<Device> devicesQuery;
@@ -178,7 +193,7 @@ public class DashboardController : ControllerBase
             {
                 devicesQuery = _context.Devices;
             }
-            else if (int.TryParse(userId, out var userIdInt))
+            else if (int.TryParse(userIdClaim, out var userIdInt))
             {
                 devicesQuery = _context.Devices.Where(d => d.UserId == userIdInt);
             }
@@ -241,6 +256,22 @@ public class DashboardController : ControllerBase
         try
         {
             var cutoffTime = DateTime.UtcNow.AddHours(-hours);
+
+            // Ensure the requesting user owns the device or is an admin
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            var device = await _context.Devices.FindAsync(deviceId);
+            if (device == null)
+                return NotFound();
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                {
+                    return Forbid();
+                }
+            }
 
             var sensorLogs = await _context.SensorLogs
                 .Where(sl => sl.DeviceId == deviceId && sl.Timestamp >= cutoffTime)

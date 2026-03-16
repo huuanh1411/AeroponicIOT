@@ -17,7 +17,9 @@ public class RegisterRequest
     public string? Username { get; set; }
     public string? Email { get; set; }
     public string? Password { get; set; }
-    public string? Role { get; set; } = "Farmer"; // Default role
+    // Role is accepted in the DTO but will be ignored for unauthenticated requests.
+    // Only an authenticated Administrator may assign a role on registration.
+    public string? Role { get; set; }
 }
 
 /// <summary>

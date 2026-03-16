@@ -56,8 +56,14 @@ public class NotificationController : ControllerBase
     {
         try
         {
-            await _notificationService.MarkAsReadAsync(notificationId);
-            
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            await _notificationService.MarkAsReadAsync(notificationId, userId);
+
             return Ok(new { message = "Notification marked as read" });
         }
         catch (Exception ex)

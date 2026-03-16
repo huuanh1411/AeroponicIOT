@@ -2,7 +2,6 @@ version: '3.8'
 services:
 
   app:
-    
     image: n3mnuonghn/aeroponiciot:1.0.0
     container_name: aeroponiciot
     build:
@@ -12,7 +11,7 @@ services:
       - "5062:80"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=14.225.202.137,1433;Database=AeroponicIOT;User Id=sa;Password=ResoSQL123456@;TrustServerCertificate=true;
-    depends_on:
-      - mssql
+      - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
+    env_file:
+      - .env
     restart: unless-stopped

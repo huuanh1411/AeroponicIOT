@@ -40,6 +40,19 @@ public class ActuatorController : ControllerBase
                 return NotFound($"Device with MAC address {controlDto.MacAddress} not found");
             }
 
+            // Ensure requester owns the device or is admin
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                {
+                    _logger.LogWarning("Unauthorized actuator control attempt by user {UserId} on device {DeviceId}", userIdClaim, device.Id);
+                    return Forbid();
+                }
+            }
+
             // Validate action
             if (controlDto.Action.ToUpper() != "ON" && controlDto.Action.ToUpper() != "OFF")
             {
@@ -84,6 +97,21 @@ public class ActuatorController : ControllerBase
         try
         {
             var cutoffTime = DateTime.UtcNow.AddDays(-days);
+
+            var device = await _context.Devices.FindAsync(deviceId);
+            if (device == null)
+                return NotFound();
+
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                {
+                    return Forbid();
+                }
+            }
 
             var logs = await _context.ActuatorLogs
                 .Where(al => al.DeviceId == deviceId && al.Timestamp >= cutoffTime)

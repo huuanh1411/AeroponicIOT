@@ -193,10 +193,19 @@ public class GardenController : ControllerBase
                 return NotFound(new { detail = "Garden not found" });
             }
 
-            var devices = await _context.Devices
-                .Where(d => d.GardenId == id)
-                .Include(d => d.Crop)
-                .ToListAsync();
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            var devicesQuery = _context.Devices.Where(d => d.GardenId == id).Include(d => d.Crop).AsQueryable();
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt))
+                    return Unauthorized();
+
+                devicesQuery = devicesQuery.Where(d => d.UserId == userIdInt);
+            }
+
+            var devices = await devicesQuery.ToListAsync();
 
             var dtos = devices.Select(d => new DeviceDto
             {

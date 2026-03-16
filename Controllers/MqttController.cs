@@ -35,6 +35,7 @@ public class MqttController : ControllerBase
     /// Publish a message to a topic (admin only)
     /// </summary>
     [HttpPost("publish")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> PublishMessage([FromBody] PublishRequest request)
     {
         try

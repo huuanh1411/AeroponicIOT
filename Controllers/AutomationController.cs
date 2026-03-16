@@ -28,9 +28,19 @@ public class AutomationController : ControllerBase
     {
         try
         {
-            var rules = await _context.AutomationRules
-                .Include(r => r.Device)
-                .OrderByDescending(r => r.IsActive)
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            IQueryable<AutomationRule> query = _context.AutomationRules.Include(r => r.Device);
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt))
+                    return Unauthorized();
+
+                query = query.Where(r => r.Device != null && r.Device.UserId == userIdInt);
+            }
+
+            var rules = await query.OrderByDescending(r => r.IsActive)
                 .ThenByDescending(r => r.CreatedAt)
                 .ToListAsync();
 
@@ -54,9 +64,19 @@ public class AutomationController : ControllerBase
             var rule = await _context.AutomationRules
                 .Include(r => r.Device)
                 .FirstOrDefaultAsync(r => r.Id == id);
-
             if (rule == null)
                 return NotFound();
+
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || rule.Device == null || rule.Device.UserId != userIdInt)
+                {
+                    return Forbid();
+                }
+            }
 
             return Ok(rule);
         }
@@ -82,6 +102,15 @@ public class AutomationController : ControllerBase
             var device = await _context.Devices.FindAsync(rule.DeviceId);
             if (device == null)
                 return BadRequest("Device not found");
+
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                    return Forbid();
+            }
 
             rule.CreatedAt = DateTime.UtcNow;
 
@@ -111,6 +140,16 @@ public class AutomationController : ControllerBase
             var rule = await _context.AutomationRules.FindAsync(id);
             if (rule == null)
                 return NotFound();
+
+            var device = await _context.Devices.FindAsync(rule.DeviceId);
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device == null || device.UserId != userIdInt)
+                    return Forbid();
+            }
 
             rule.RuleName = updatedRule.RuleName;
             rule.RuleType = updatedRule.RuleType;
@@ -149,6 +188,16 @@ public class AutomationController : ControllerBase
             if (rule == null)
                 return NotFound();
 
+            var device = await _context.Devices.FindAsync(rule.DeviceId);
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device == null || device.UserId != userIdInt)
+                    return Forbid();
+            }
+
             rule.IsActive = !rule.IsActive;
             _context.AutomationRules.Update(rule);
             await _context.SaveChangesAsync();
@@ -175,6 +224,16 @@ public class AutomationController : ControllerBase
             if (rule == null)
                 return NotFound();
 
+            var device = await _context.Devices.FindAsync(rule.DeviceId);
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device == null || device.UserId != userIdInt)
+                    return Forbid();
+            }
+
             _context.AutomationRules.Remove(rule);
             await _context.SaveChangesAsync();
 
@@ -196,6 +255,19 @@ public class AutomationController : ControllerBase
     {
         try
         {
+            var device = await _context.Devices.FindAsync(deviceId);
+            if (device == null)
+                return NotFound();
+
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (userRole != "Administrator")
+            {
+                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                    return Forbid();
+            }
+
             var rules = await _context.AutomationRules
                 .Where(r => r.DeviceId == deviceId)
                 .OrderByDescending(r => r.Priority)

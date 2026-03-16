@@ -22,7 +22,6 @@ public class SensorController : ControllerBase
     }
 
     [HttpPost]
-    [AllowAnonymous] // Allow IoT devices to send data without authentication
     public async Task<IActionResult> ReceiveSensorData([FromBody] SensorDataDto sensorData)
     {
         try

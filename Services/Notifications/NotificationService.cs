@@ -128,9 +128,10 @@ public class NotificationService : INotificationService
     }
 
     /// <summary>
-    /// Mark a notification as read
+    /// <summary>
+    /// Mark a notification as read if it belongs to the specified user
     /// </summary>
-    public async Task MarkAsReadAsync(int notificationId)
+    public async Task MarkAsReadAsync(int notificationId, int userId)
     {
         try
         {
@@ -141,12 +142,18 @@ public class NotificationService : INotificationService
                 return;
             }
 
+            if (notification.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to mark notification {NotificationId} they do not own", userId, notificationId);
+                return;
+            }
+
             notification.IsRead = true;
             notification.ReadAt = DateTime.UtcNow;
             _context.Notifications.Update(notification);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Notification {NotificationId} marked as read", notificationId);
+            _logger.LogInformation("Notification {NotificationId} marked as read by user {UserId}", notificationId, userId);
         }
         catch (Exception ex)
         {

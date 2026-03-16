@@ -36,9 +36,9 @@ public interface INotificationService
     Task<List<NotificationDto>> GetUnreadNotificationsAsync(int userId);
 
     /// <summary>
-    /// Mark notification as read
+    /// Mark notification as read (only if it belongs to the user)
     /// </summary>
-    Task MarkAsReadAsync(int notificationId);
+    Task MarkAsReadAsync(int notificationId, int userId);
 
     /// <summary>
     /// Clear all notifications for a user

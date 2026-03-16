@@ -46,6 +46,29 @@ public class MqttService : IMqttService, IDisposable
                 .WithDefaultEndpointPort(port)
                 .WithDefaultEndpointBoundIPAddress(System.Net.IPAddress.Any);
 
+            // If MQTT username/password are configured, enforce connection authentication
+            var mqttUser = _configuration["MqttSettings:Username"]; 
+            var mqttPassword = _configuration["MqttSettings:Password"];
+            if (!string.IsNullOrWhiteSpace(mqttUser) && !string.IsNullOrWhiteSpace(mqttPassword))
+            {
+                optionsBuilder = optionsBuilder.WithConnectionValidator(context =>
+                {
+                    if (string.IsNullOrWhiteSpace(context.Username) || string.IsNullOrWhiteSpace(context.Password))
+                    {
+                        context.ReasonCode = MQTTnet.Protocol.MqttConnectReasonCode.BadUserNameOrPassword;
+                        return;
+                    }
+
+                    if (context.Username != mqttUser || context.Password != mqttPassword)
+                    {
+                        context.ReasonCode = MQTTnet.Protocol.MqttConnectReasonCode.BadUserNameOrPassword;
+                        return;
+                    }
+
+                    context.ReasonCode = MQTTnet.Protocol.MqttConnectReasonCode.Success;
+                });
+            }
+
             var options = optionsBuilder.Build();
 
             var factory = new MqttFactory();

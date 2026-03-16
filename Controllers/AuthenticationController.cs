@@ -55,12 +55,19 @@ public class AuthenticationController : ControllerBase
                 });
             }
 
+            // Determine role server-side. Only an authenticated Administrator may assign roles.
+            var roleToAssign = "Farmer";
+            if (User?.Identity != null && User.Identity.IsAuthenticated && User.IsInRole("Administrator") && !string.IsNullOrWhiteSpace(request.Role))
+            {
+                roleToAssign = request.Role!;
+            }
+
             // Create new user
             var user = new User
             {
                 Username = request.Username,
                 Email = request.Email,
-                Role = request.Role ?? "Farmer",
+                Role = roleToAssign,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 CreatedAt = DateTime.UtcNow
             };
@@ -198,9 +205,8 @@ public class AuthenticationController : ControllerBase
     private string GenerateJwtToken(User user)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"] ?? "your-super-secret-key-change-this-in-production-at-least-32-characters-long";
+        var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured. Set JwtSettings:SecretKey in configuration or environment variables.");
         var expirationMinutes = int.Parse(jwtSettings["ExpirationMinutes"] ?? "1440");
-
         var key = Encoding.ASCII.GetBytes(secretKey);
         var tokenHandler = new JwtSecurityTokenHandler();
 
@@ -216,8 +222,8 @@ public class AuthenticationController : ControllerBase
         {
             Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.AddMinutes(expirationMinutes),
-            Issuer = "AeroponicIOT",
-            Audience = "AeroponicIOT",
+            Issuer = jwtSettings["Issuer"] ?? "AeroponicIOT",
+            Audience = jwtSettings["Audience"] ?? "AeroponicIOT",
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(key),
                 SecurityAlgorithms.HmacSha256Signature)

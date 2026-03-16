@@ -29,7 +29,12 @@ builder.Services.AddCors(options =>
 
 // Add JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"] ?? "your-super-secret-key-change-this-in-production-at-least-32-characters-long";
+var secretKey = jwtSettings["SecretKey"];
+if (string.IsNullOrWhiteSpace(secretKey))
+{
+    throw new InvalidOperationException("JWT SecretKey is not configured. Set JwtSettings:SecretKey via environment or configuration.");
+}
+
 var key = Encoding.ASCII.GetBytes(secretKey);
 
 builder.Services.AddAuthentication(options =>
@@ -43,8 +48,10 @@ builder.Services.AddAuthentication(options =>
     {
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = false,
-        ValidateAudience = false,
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidateAudience = true,
+        ValidAudience = jwtSettings["Audience"],
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
