@@ -1,5 +1,7 @@
 using AeroponicIOT.DTOs;
+using AeroponicIOT.Options;
 using AeroponicIOT.Services.Sensors;
+using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Adapter;
 using MQTTnet.Diagnostics;
@@ -17,7 +19,7 @@ namespace AeroponicIOT.Services.Mqtt;
 public class MqttService : IMqttService, IDisposable
 {
     private readonly ILogger<MqttService> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly MqttSettingsOptions _mqttOptions;
     private readonly IServiceScopeFactory _scopeFactory;
     private MqttServer? _mqttServer;
     private bool _isRunning;
@@ -26,11 +28,11 @@ public class MqttService : IMqttService, IDisposable
 
     public MqttService(
         ILogger<MqttService> logger,
-        IConfiguration configuration,
+        IOptions<MqttSettingsOptions> mqttOptions,
         IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
-        _configuration = configuration;
+        _mqttOptions = mqttOptions.Value;
         _scopeFactory = scopeFactory;
     }
 
@@ -41,14 +43,14 @@ public class MqttService : IMqttService, IDisposable
     {
         try
         {
-            var port = int.Parse(_configuration.GetSection("MqttSettings")["Port"] ?? "1883");
+            var port = _mqttOptions.Port;
             var optionsBuilder = new MqttServerOptionsBuilder()
                 .WithDefaultEndpointPort(port)
                 .WithDefaultEndpointBoundIPAddress(System.Net.IPAddress.Any);
 
             // If MQTT username/password are configured, enforce connection authentication
-            var mqttUser = _configuration["MqttSettings:Username"]; 
-            var mqttPassword = _configuration["MqttSettings:Password"];
+            var mqttUser = _mqttOptions.Username;
+            var mqttPassword = _mqttOptions.Password;
 
             var options = optionsBuilder.Build();
 
@@ -131,14 +133,14 @@ public class MqttService : IMqttService, IDisposable
     /// <summary>
     /// Publish a message to a specific topic
     /// </summary>
-    public async Task PublishAsync(string topic, string payload, bool retainFlag = false)
+    public async Task<bool> PublishAsync(string topic, string payload, bool retainFlag = false)
     {
         try
         {
             if (_mqttServer == null || !_isRunning)
             {
                 _logger.LogWarning("MQTT Broker not running, cannot publish to {Topic}", topic);
-                return;
+                return false;
             }
 
             var applicationMessage = new MqttApplicationMessageBuilder()
@@ -155,10 +157,12 @@ public class MqttService : IMqttService, IDisposable
                 });
 
             _logger.LogDebug("Published message to topic {Topic}", topic);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error publishing message to {Topic}", topic);
+            return false;
         }
     }
 

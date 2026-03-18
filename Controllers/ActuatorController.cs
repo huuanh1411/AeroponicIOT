@@ -75,7 +75,16 @@ public class ActuatorController : ControllerBase
                 controlDto.ActuatorType, controlDto.Action, device.Name, device.MacAddress);
 
             // Publish control command via MQTT
-            await PublishActuatorCommandViamqtt(device, controlDto);
+            var delivered = await PublishActuatorCommandViamqtt(device, controlDto);
+            if (!delivered)
+            {
+                return StatusCode(503, new
+                {
+                    message = "Actuator command logged but MQTT delivery failed",
+                    actuatorLogId = actuatorLog.Id,
+                    deliveryMethod = "MQTT"
+                });
+            }
 
             return Ok(new
             {
@@ -133,7 +142,7 @@ public class ActuatorController : ControllerBase
     /// Topic: devices/{macAddress}/control
     /// Payload: JSON with actuatorType and action
     /// </summary>
-    private async Task PublishActuatorCommandViamqtt(Device device, ActuatorControlDto controlDto)
+    private async Task<bool> PublishActuatorCommandViamqtt(Device device, ActuatorControlDto controlDto)
     {
         try
         {
@@ -151,14 +160,20 @@ public class ActuatorController : ControllerBase
 
             var jsonPayload = JsonSerializer.Serialize(payload);
             
-            await _mqttService.PublishAsync(topic, jsonPayload, retainFlag: true);
+            var delivered = await _mqttService.PublishAsync(topic, jsonPayload, retainFlag: true);
+            if (!delivered)
+            {
+                _logger.LogWarning("Control command failed to publish via MQTT to {Topic}", topic);
+                return false;
+            }
             
             _logger.LogInformation("Control command published via MQTT to {Topic}", topic);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error publishing control command via MQTT");
-            // Don't throw - command is already logged in database
+            return false;
         }
     }
 }

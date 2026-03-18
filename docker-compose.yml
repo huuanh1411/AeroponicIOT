@@ -9,9 +9,23 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5062:80"
+      - "1883:1883"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
-    env_file:
-      - .env
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY}
+      - JwtSettings__Issuer=AeroponicIOT
+      - JwtSettings__Audience=AeroponicIOT
+      - JwtSettings__ExpirationMinutes=1440
+      - MqttSettings__Port=1883
+      - MqttSettings__Host=0.0.0.0
+      - Provisioning__SharedKey=${PROVISIONING_SHARED_KEY}
+      - Provisioning__ClaimCodeMinutes=10
+      - EmailSettings__Enabled=${EMAIL_ENABLED:-false}
+      - EmailSettings__SmtpHost=${SMTP_HOST:-smtp.gmail.com}
+      - EmailSettings__SmtpPort=${SMTP_PORT:-587}
+      - EmailSettings__SmtpUsername=${SMTP_USERNAME:-}
+      - EmailSettings__SmtpPassword=${SMTP_PASSWORD:-}
+      - EmailSettings__FromEmail=${FROM_EMAIL:-noreply@smartfarmiot.com}
+      - EmailSettings__FromName=Smart Farm IoT System
     restart: unless-stopped

@@ -49,13 +49,42 @@ On startup, EF Core migrations are applied automatically if the database is avai
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/sensor` | POST | Receive sensor data from IoT devices |
+| `/api/sensor` | POST | Receive sensor data from IoT devices (JWT or `X-Device-Key`) |
 | `/api/dashboard/latest` | GET | Get latest dashboard data |
 | `/api/dashboard/history/{deviceId}` | GET | Get device sensor history |
 | `/api/actuator/control` | POST | Send control commands to devices |
 | `/api/actuator/logs/{deviceId}` | GET | Get actuator command logs |
 | `/api/mqtt/status` | GET | Check MQTT broker status |
 | `/api/mqtt/publish` | POST | Publish message to MQTT topic |
+
+### HTTP Sensor Ingestion Authentication
+
+For direct HTTP sensor ingestion, use one of:
+- JWT Bearer token (regular authenticated API flow)
+- `X-Device-Key` header that matches `Provisioning:SharedKey`
+
+Example:
+```bash
+curl -X POST http://localhost:5062/api/sensor \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Key: YOUR_PROVISIONING_SHARED_KEY" \
+  -d '{
+    "macAddress": "AA:BB:CC:DD:EE:01",
+    "ph": 6.2,
+    "tds": 950,
+    "waterTemperature": 22.5,
+    "airHumidity": 68.0
+  }'
+```
+
+### CORS Configuration
+
+The API uses an allowlist from `Cors:AllowedOrigins`.
+- Development: if no origins are configured, permissive CORS is enabled.
+- Non-development: if no origins are configured, cross-origin requests are blocked.
+
+Environment-variable example:
+`Cors__AllowedOrigins__0=https://your-frontend.example.com`
 
 ## MQTT Integration
 

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AeroponicIOT.Data;
+using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
 
 namespace AeroponicIOT.Controllers;
@@ -91,7 +92,7 @@ public class AutomationController : ControllerBase
     /// Create a new automation rule
     /// </summary>
     [HttpPost("rules")]
-    public async Task<ActionResult<AutomationRule>> CreateRule([FromBody] AutomationRule rule)
+    public async Task<ActionResult<AutomationRule>> CreateRule([FromBody] CreateAutomationRuleDto request)
     {
         try
         {
@@ -99,7 +100,7 @@ public class AutomationController : ControllerBase
                 return BadRequest(ModelState);
 
             // Validate device exists
-            var device = await _context.Devices.FindAsync(rule.DeviceId);
+            var device = await _context.Devices.FindAsync(request.DeviceId);
             if (device == null)
                 return BadRequest("Device not found");
 
@@ -111,6 +112,24 @@ public class AutomationController : ControllerBase
                 if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
                     return Forbid();
             }
+
+            var rule = new AutomationRule
+            {
+                DeviceId = request.DeviceId,
+                RuleName = request.RuleName,
+                RuleType = request.RuleType,
+                ActuatorType = request.ActuatorType,
+                Action = request.Action,
+                ConditionParameter = request.ConditionParameter,
+                ConditionValue = request.ConditionValue,
+                ConditionOperator = request.ConditionOperator,
+                ScheduleTime = request.ScheduleTime,
+                ScheduleDays = request.ScheduleDays,
+                DurationMinutes = request.DurationMinutes,
+                Priority = request.Priority,
+                IsActive = request.IsActive,
+                CreatedAt = DateTime.UtcNow
+            };
 
             rule.CreatedAt = DateTime.UtcNow;
 
@@ -133,7 +152,7 @@ public class AutomationController : ControllerBase
     /// Update an automation rule
     /// </summary>
     [HttpPut("rules/{id}")]
-    public async Task<IActionResult> UpdateRule(int id, [FromBody] AutomationRule updatedRule)
+    public async Task<IActionResult> UpdateRule(int id, [FromBody] UpdateAutomationRuleDto updatedRule)
     {
         try
         {

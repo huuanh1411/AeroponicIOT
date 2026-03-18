@@ -102,6 +102,7 @@ public class NotificationController : ControllerBase
     /// Test email notification (admin only)
     /// </summary>
     [HttpPost("test-email")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> TestEmailNotification()
     {
         try

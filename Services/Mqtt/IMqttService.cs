@@ -18,7 +18,7 @@ public interface IMqttService
     /// <summary>
     /// Publish a message to a topic
     /// </summary>
-    Task PublishAsync(string topic, string payload, bool retainFlag = false);
+    Task<bool> PublishAsync(string topic, string payload, bool retainFlag = false);
 
     /// <summary>
     /// Check if the broker is running

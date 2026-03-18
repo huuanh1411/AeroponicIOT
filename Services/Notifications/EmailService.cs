@@ -1,6 +1,8 @@
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+using AeroponicIOT.Options;
+using Microsoft.Extensions.Options;
 
 namespace AeroponicIOT.Services.Notifications;
 
@@ -9,7 +11,6 @@ namespace AeroponicIOT.Services.Notifications;
 /// </summary>
 public class EmailService : IEmailService
 {
-    private readonly IConfiguration _configuration;
     private readonly ILogger<EmailService> _logger;
     private readonly string? _smtpHost;
     private readonly int _smtpPort;
@@ -20,18 +21,17 @@ public class EmailService : IEmailService
 
     public bool IsConfigured => !string.IsNullOrEmpty(_smtpHost) && !string.IsNullOrEmpty(_fromEmail);
 
-    public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+    public EmailService(IOptions<EmailSettingsOptions> emailOptions, ILogger<EmailService> logger)
     {
-        _configuration = configuration;
         _logger = logger;
 
-        var emailSettings = configuration.GetSection("EmailSettings");
-        _smtpHost = emailSettings["SmtpHost"];
-        _smtpPort = int.TryParse(emailSettings["SmtpPort"], out int port) ? port : 587;
-        _smtpUsername = emailSettings["SmtpUsername"];
-        _smtpPassword = emailSettings["SmtpPassword"];
-        _fromEmail = emailSettings["FromEmail"];
-        _fromName = emailSettings["FromName"] ?? "Smart Farm IoT";
+        var settings = emailOptions.Value;
+        _smtpHost = settings.SmtpHost;
+        _smtpPort = settings.SmtpPort;
+        _smtpUsername = settings.SmtpUsername;
+        _smtpPassword = settings.SmtpPassword;
+        _fromEmail = settings.FromEmail;
+        _fromName = settings.FromName;
 
         if (IsConfigured)
         {
@@ -54,7 +54,7 @@ public class EmailService : IEmailService
             }
 
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(_fromName, _fromEmail));
+            message.From.Add(new MailboxAddress(_fromName, _fromEmail!));
             message.To.Add(MailboxAddress.Parse(to));
             message.Subject = subject;
 
@@ -117,7 +117,7 @@ public class EmailService : IEmailService
                     try
                     {
                         var message = new MimeMessage();
-                        message.From.Add(new MailboxAddress(_fromName, _fromEmail));
+                        message.From.Add(new MailboxAddress(_fromName, _fromEmail!));
                         message.To.Add(MailboxAddress.Parse(recipient));
                         message.Subject = subject;
 

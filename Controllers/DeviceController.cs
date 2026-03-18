@@ -1,9 +1,11 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Options;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using System.Security.Claims;
 
@@ -16,13 +18,16 @@ public class DeviceController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<DeviceController> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly ProvisioningOptions _provisioningOptions;
 
-    public DeviceController(ApplicationDbContext context, ILogger<DeviceController> logger, IConfiguration configuration)
+    public DeviceController(
+        ApplicationDbContext context,
+        ILogger<DeviceController> logger,
+        IOptions<ProvisioningOptions> provisioningOptions)
     {
         _context = context;
         _logger = logger;
-        _configuration = configuration;
+        _provisioningOptions = provisioningOptions.Value;
     }
 
     private int GetCurrentUserId()
@@ -143,7 +148,7 @@ public class DeviceController : ControllerBase
         try
         {
             var providedKey = Request.Headers["X-Device-Key"].FirstOrDefault();
-            var configuredKey = _configuration["Provisioning:SharedKey"];
+            var configuredKey = _provisioningOptions.SharedKey;
 
             if (string.IsNullOrWhiteSpace(configuredKey))
             {
@@ -215,7 +220,7 @@ public class DeviceController : ControllerBase
             }
 
             var claimCode = GenerateClaimCode();
-            var claimCodeMinutes = int.TryParse(_configuration["Provisioning:ClaimCodeMinutes"], out var configuredMinutes) ? configuredMinutes : 10;
+            var claimCodeMinutes = _provisioningOptions.ClaimCodeMinutes;
             device.ClaimCode = claimCode;
             device.ClaimCodeExpiresAt = DateTime.UtcNow.AddMinutes(claimCodeMinutes);
             device.Status = "Pending";
@@ -600,17 +605,14 @@ public class DeviceController : ControllerBase
                 return Forbid();
             }
 
-            // Delete related sensor logs
-            var sensorLogs = await _context.SensorLogs
+            // Delete related logs with set-based operations to avoid loading large collections into memory.
+            await _context.SensorLogs
                 .Where(sl => sl.DeviceId == id)
-                .ToListAsync();
-            _context.SensorLogs.RemoveRange(sensorLogs);
+                .ExecuteDeleteAsync();
 
-            // Delete related actuator logs
-            var actuatorLogs = await _context.ActuatorLogs
+            await _context.ActuatorLogs
                 .Where(al => al.DeviceId == id)
-                .ToListAsync();
-            _context.ActuatorLogs.RemoveRange(actuatorLogs);
+                .ExecuteDeleteAsync();
 
             // Delete the device
             _context.Devices.Remove(device);

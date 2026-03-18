@@ -50,11 +50,11 @@
             },
             "MQTTnet": {
               "target": "Package",
-              "version": "[4.3.1.1533, )"
+              "version": "[4.3.2.930, )"
             },
             "MailKit": {
               "target": "Package",
-              "version": "[4.7.0, )"
+              "version": "[4.15.1, )"
             },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",

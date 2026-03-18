@@ -45,7 +45,11 @@ public class MqttController : ControllerBase
                 return BadRequest("Topic and Payload are required");
             }
 
-            await _mqttService.PublishAsync(request.Topic, request.Payload, request.Retain);
+            var delivered = await _mqttService.PublishAsync(request.Topic, request.Payload, request.Retain);
+            if (!delivered)
+            {
+                return StatusCode(503, new { message = "MQTT publish failed", topic = request.Topic });
+            }
             
             _logger.LogInformation("Published message to {Topic}", request.Topic);
             

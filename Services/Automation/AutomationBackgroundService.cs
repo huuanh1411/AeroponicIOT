@@ -267,7 +267,11 @@ public class AutomationBackgroundService : BackgroundService
 
         var jsonPayload = JsonSerializer.Serialize(payload);
 
-        await mqttService.PublishAsync(topic, jsonPayload, retainFlag: true);
+        var delivered = await mqttService.PublishAsync(topic, jsonPayload, retainFlag: true);
+        if (!delivered)
+        {
+            throw new InvalidOperationException($"MQTT publish failed for automation rule {rule.Id}");
+        }
 
         // Update rule execution time to enforce cooldowns.
         rule.LastExecuted = nowUtc;

@@ -62,6 +62,11 @@ public class DashboardController : ControllerBase
                 .Include(a => a.Device)
                 .AsQueryable();
 
+            if (userRole != "Administrator" && int.TryParse(userIdClaim, out var alertsUserId))
+            {
+                activeAlertsQuery = activeAlertsQuery.Where(a => a.Device != null && a.Device.UserId == alertsUserId);
+            }
+
             if (gardenId.HasValue)
             {
                 activeAlertsQuery = activeAlertsQuery.Where(a => a.Device != null && a.Device.GardenId == gardenId.Value);
@@ -170,9 +175,14 @@ public class DashboardController : ControllerBase
             var deviceHealth = totalDevices > 0 ? (activeDevices * 100.0) / totalDevices : 0;
 
             // Check for critical alerts
-            var criticalAlerts = await _context.Alerts
-                .Where(a => !a.IsResolved)
-                .CountAsync();
+            IQueryable<Alert> criticalAlertsQuery = _context.Alerts.Where(a => !a.IsResolved);
+
+            if (userRole != "Administrator" && int.TryParse(userIdClaim, out var alertsUserId))
+            {
+                criticalAlertsQuery = criticalAlertsQuery.Where(a => a.Device != null && a.Device.UserId == alertsUserId);
+            }
+
+            var criticalAlerts = await criticalAlertsQuery.CountAsync();
 
             // Adjust health based on alerts
             var adjustedHealth = Math.Max(0, deviceHealth - (criticalAlerts * 5));

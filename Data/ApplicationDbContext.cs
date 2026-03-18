@@ -45,7 +45,7 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Device>()
             .HasOne(d => d.User)
-            .WithMany()
+            .WithMany(u => u.Devices)
             .HasForeignKey(d => d.UserId)
             .OnDelete(DeleteBehavior.SetNull);
 

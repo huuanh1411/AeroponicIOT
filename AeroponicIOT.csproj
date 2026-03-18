@@ -15,8 +15,15 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0" />
     <PackageReference Include="BCrypt.Net-Core" Version="1.6.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />
-    <PackageReference Include="MQTTnet" Version="4.3.1.1533" />
-    <PackageReference Include="MailKit" Version="4.7.0" />
+    <PackageReference Include="MQTTnet" Version="4.3.2.930" />
+    <PackageReference Include="MailKit" Version="4.15.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests\**\*" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
   </ItemGroup>
 
 </Project>

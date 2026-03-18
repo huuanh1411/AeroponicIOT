@@ -6,10 +6,13 @@ using AeroponicIOT.Services.Notifications;
 using AeroponicIOT.Services.Sensors;
 using AeroponicIOT.Services.Maintenance;
 using AeroponicIOT.Middleware;
+using AeroponicIOT.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,26 +20,67 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
+builder.Services.AddOptions<JwtSettingsOptions>()
+    .Bind(builder.Configuration.GetSection("JwtSettings"))
+    .ValidateDataAnnotations()
+    .Validate(o => !string.IsNullOrWhiteSpace(o.SecretKey), "JwtSettings:SecretKey is required")
+    .ValidateOnStart();
+
+builder.Services.AddOptions<MqttSettingsOptions>()
+    .Bind(builder.Configuration.GetSection("MqttSettings"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<ProvisioningOptions>()
+    .Bind(builder.Configuration.GetSection("Provisioning"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<EmailSettingsOptions>()
+    .Bind(builder.Configuration.GetSection("EmailSettings"))
+    .ValidateDataAnnotations()
+    .Validate(o => !o.Enabled || !string.IsNullOrWhiteSpace(o.SmtpHost), "EmailSettings:SmtpHost is required when email is enabled")
+    .Validate(o => !o.Enabled || !string.IsNullOrWhiteSpace(o.FromEmail), "EmailSettings:FromEmail is required when email is enabled")
+    .ValidateOnStart();
+
+builder.Services.AddOptions<CorsOptions>()
+    .Bind(builder.Configuration.GetSection("Cors"));
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("ConfiguredOrigins", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>()
+            ?? Array.Empty<string>();
+
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+            return;
+        }
+
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+            return;
+        }
+
+        policy.SetIsOriginAllowed(_ => false)
+            .AllowAnyMethod()
+            .AllowAnyHeader();
     });
 });
 
 // Add JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"];
-if (string.IsNullOrWhiteSpace(secretKey))
-{
-    throw new InvalidOperationException("JWT SecretKey is not configured. Set JwtSettings:SecretKey via environment or configuration.");
-}
-
-var key = Encoding.ASCII.GetBytes(secretKey);
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettingsOptions>()!;
+var key = Encoding.ASCII.GetBytes(jwtSettings.SecretKey);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -50,9 +94,9 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(key),
         ValidateIssuer = true,
-        ValidIssuer = jwtSettings["Issuer"],
+        ValidIssuer = jwtSettings.Issuer,
         ValidateAudience = true,
-        ValidAudience = jwtSettings["Audience"],
+        ValidAudience = jwtSettings.Audience,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
@@ -62,6 +106,18 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Administrator"));
     options.AddPolicy("FarmerOrAdmin", policy => policy.RequireRole("Farmer", "Administrator"));
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("auth", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 10;
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        limiterOptions.QueueLimit = 0;
+    });
 });
 
 // Add DbContext
@@ -92,7 +148,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseMiddleware<CorrelationIdMiddleware>();
-app.UseCors("AllowAll");
+app.UseCors("ConfiguredOrigins");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -100,7 +157,7 @@ app.UseAuthorization();
 app.UseStaticFiles();
 
 // Health endpoint (DB + MQTT)
-app.MapGet("/health", async (ApplicationDbContext db, IMqttService mqtt, CancellationToken ct) =>
+app.MapGet("/health", async (ApplicationDbContext db, IMqttService mqtt, ILogger<Program> logger, CancellationToken ct) =>
 {
     try
     {
@@ -118,12 +175,13 @@ app.MapGet("/health", async (ApplicationDbContext db, IMqttService mqtt, Cancell
     }
     catch (Exception ex)
     {
+        logger.LogError(ex, "Health check failed while connecting to database");
         return Results.Json(new
         {
             status = "Unhealthy",
             db = "Error",
             mqtt = mqtt.IsRunning ? "Running" : "Stopped",
-            error = ex.Message,
+            error = "Database health check failed",
             timestamp = DateTime.UtcNow
         }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
@@ -165,7 +223,10 @@ using (var scope = app.Services.CreateScope())
     // Apply migrations on startup so the container can initialize schema automatically.
     try
     {
-        dbContext.Database.Migrate();
+        if (dbContext.Database.IsRelational())
+        {
+            dbContext.Database.Migrate();
+        }
         await SeedDefaultCropsAsync(dbContext, logger);
     }
     catch (Exception ex)
@@ -242,4 +303,8 @@ static async Task SeedDefaultCropsAsync(ApplicationDbContext dbContext, ILogger 
     dbContext.Crops.AddRange(crops);
     await dbContext.SaveChangesAsync();
     logger.LogInformation("Seeded {CropCount} default crops", crops.Count);
+}
+
+public partial class Program
+{
 }

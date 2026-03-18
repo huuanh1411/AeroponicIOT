@@ -19,7 +19,6 @@ const deviceModal = document.getElementById('deviceModal');
 const deviceModalTitle = document.getElementById('deviceModalTitle');
 const deviceModalContent = document.getElementById('deviceModalContent');
 const closeModal = document.querySelector('.close');
-const gardenSelect = document.getElementById('gardenSelect');
 const addGardenBtn = document.getElementById('addGardenBtn');
 const gardenModal = document.getElementById('gardenModal');
 const gardenModalClose = document.getElementById('gardenModalClose');
@@ -39,6 +38,9 @@ const humidityStatus = document.getElementById('humidityStatus');
 const lightStatus = document.getElementById('lightStatus');
 
 let profileModal = null;
+let dashboardDevices = [];
+let crops = [];
+let gardens = [];
 const actuatorStates = {
     Light: false,
     Fan: false,
@@ -57,6 +59,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Check authentication
     checkAuthentication();
 
+    loadCrops();
     loadGardens();
     
     loadDashboardData();
@@ -347,7 +350,6 @@ closeModal.addEventListener('click', () => deviceModal.style.display = 'none');
 gardenModalClose?.addEventListener('click', closeGardenModal);
 addGardenBtn?.addEventListener('click', openGardenModal);
 gardenForm?.addEventListener('submit', handleCreateGarden);
-gardenSelect?.addEventListener('change', onGardenChanged);
 window.addEventListener('click', (e) => {
     if (e.target === deviceModal) {
         deviceModal.style.display = 'none';
@@ -359,12 +361,6 @@ window.addEventListener('click', (e) => {
         closeProfileModal();
     }
 });
-
-function onGardenChanged() {
-    selectedGardenId = gardenSelect.value;
-    localStorage.setItem('selectedGardenId', selectedGardenId);
-    loadDashboardData();
-}
 
 function openGardenModal() {
     gardenModal.style.display = 'block';
@@ -391,32 +387,61 @@ async function loadGardens() {
 
         if (!response.ok) throw new Error('Không thể tải danh sách khu vườn');
 
-        const gardens = await response.json();
-        updateGardenSelect(gardens);
+        gardens = await response.json();
+        renderGardenPills();
     } catch (error) {
         console.error('Error loading gardens:', error);
         showError('Không thể tải danh sách khu vườn');
     }
 }
 
-function updateGardenSelect(gardens) {
-    if (!gardenSelect) return;
+async function loadCrops() {
+    try {
+        const response = await fetch(`${API_BASE}/crop`, {
+            method: 'GET',
+            headers: getAuthHeaders()
+        });
 
-    gardenSelect.innerHTML = '<option value="">Tất cả khu vườn</option>';
+        if (response.status === 401) {
+            logout();
+            return;
+        }
 
-    gardens.forEach(garden => {
-        const option = document.createElement('option');
-        option.value = String(garden.id);
-        option.textContent = `${garden.name} (${garden.deviceCount} thiết bị)`;
-        gardenSelect.appendChild(option);
-    });
+        if (!response.ok) throw new Error('Không thể tải danh sách cây trồng');
 
-    if (selectedGardenId && gardens.some(g => String(g.id) === selectedGardenId)) {
-        gardenSelect.value = selectedGardenId;
-    } else {
+        crops = await response.json();
+    } catch (error) {
+        console.error('Error loading crops:', error);
+    }
+}
+
+function renderGardenPills() {
+    const container = document.getElementById('gardenPills');
+    if (!container) return;
+
+    // Validate stored selection still exists
+    if (selectedGardenId !== '' && !gardens.some(g => String(g.id) === selectedGardenId)) {
         selectedGardenId = '';
         localStorage.setItem('selectedGardenId', '');
     }
+
+    container.innerHTML = '';
+
+    gardens.forEach(garden => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'garden-pill' + (selectedGardenId === String(garden.id) ? ' is-active' : '');
+        btn.innerHTML = `${escapeHtml(garden.name)} <span class="garden-pill-count">${garden.deviceCount}</span>`;
+        btn.addEventListener('click', () => selectGarden(String(garden.id)));
+        container.appendChild(btn);
+    });
+}
+
+function selectGarden(id) {
+    selectedGardenId = id;
+    localStorage.setItem('selectedGardenId', id);
+    renderGardenPills();
+    loadDashboardData();
 }
 
 async function handleCreateGarden(e) {
@@ -459,9 +484,7 @@ async function handleCreateGarden(e) {
 
         selectedGardenId = String(created.id);
         localStorage.setItem('selectedGardenId', selectedGardenId);
-        if (gardenSelect) {
-            gardenSelect.value = selectedGardenId;
-        }
+        renderGardenPills();
 
         loadDashboardData();
     } catch (error) {
@@ -497,6 +520,8 @@ async function loadDashboardData() {
 
 // Update dashboard with data
 function updateDashboard(data) {
+    dashboardDevices = data.devices || [];
+
     // Update overview stats
     totalDevices.textContent = data.totalDevices;
     activeDevices.textContent = data.activeDevices;
@@ -602,6 +627,7 @@ function createDeviceCard(device) {
 
     const statusClass = device.isActive ? 'status-active' : 'status-inactive';
     const statusText = device.isActive ? 'Hoạt động' : 'Ngừng hoạt động';
+    const health = getDeviceHealthLevel(device);
 
     let sensorHtml = '<div class="sensor-grid">';
     if (device.latestSensorData) {
@@ -635,17 +661,44 @@ function createDeviceCard(device) {
             <div class="device-name">${device.name}</div>
             <div class="device-status ${statusClass}">${statusText}</div>
         </div>
+        <div class="device-health-badge health-${health.level}">${health.label}</div>
         <div class="device-mac">MAC: ${device.macAddress}</div>
         <div class="device-crop">Khu vườn: ${device.gardenName || 'Chưa gán'}</div>
         <div class="device-crop">Cây trồng: ${device.cropName || 'Chưa gán'}</div>
         <div>Lần cuối online: ${lastSeen}</div>
         ${sensorHtml}
         <div class="device-actions">
-            <button class="btn-secondary" onclick="showDeviceDetails(${device.id})">Chi tiết</button>
+            <button class="btn-secondary" onclick="openDeviceEditModal(${device.id})">Sửa nhanh</button>
         </div>
     `;
 
     return card;
+}
+
+function getDeviceHealthLevel(device) {
+    if (!device.isActive) {
+        return { level: 'offline', label: 'Ngoại tuyến' };
+    }
+
+    const sensor = device.latestSensorData;
+    if (!sensor) {
+        return { level: 'warning', label: 'Cảnh báo' };
+    }
+
+    let outOfRangeCount = 0;
+    if (sensor.ph < 5.5 || sensor.ph > 6.8) outOfRangeCount++;
+    if (sensor.tds < 600 || sensor.tds > 1500) outOfRangeCount++;
+    if (sensor.waterTemperature < 18 || sensor.waterTemperature > 28) outOfRangeCount++;
+    if (sensor.airHumidity < 50 || sensor.airHumidity > 80) outOfRangeCount++;
+    if (sensor.lightIntensity < 6000 || sensor.lightIntensity > 22000) outOfRangeCount++;
+
+    if (outOfRangeCount >= 2) {
+        return { level: 'critical', label: 'Nghiêm trọng' };
+    }
+    if (outOfRangeCount === 1) {
+        return { level: 'warning', label: 'Cảnh báo' };
+    }
+    return { level: 'healthy', label: 'Tốt' };
 }
 
 // Update alerts display
@@ -780,54 +833,242 @@ function getActuatorDisplayName(actuator) {
     return map[actuator] || actuator;
 }
 
-// Show device details
-async function showDeviceDetails(deviceId) {
+function buildDeviceEditForm(device) {
+    const cropOptions = [
+        '<option value="">Chưa gán cây trồng</option>',
+        ...crops.map(crop => `<option value="${crop.id}" ${device.currentCropId === crop.id ? 'selected' : ''}>${crop.name}</option>`)
+    ].join('');
+
+    const gardenOptions = [
+        '<option value="">Chưa gán khu vườn</option>',
+        ...gardens.map(garden => `<option value="${garden.id}" ${device.gardenId === garden.id ? 'selected' : ''}>${garden.name}</option>`)
+    ].join('');
+
+    return `
+        <form id="quickEditDeviceForm" class="control-form">
+            <input type="hidden" id="quickEditDeviceId" value="${device.id}">
+            <div class="form-group">
+                <label for="quickEditDeviceName">Tên thiết bị:</label>
+                <input type="text" id="quickEditDeviceName" value="${escapeHtml(device.name || '')}" required>
+            </div>
+            <div class="form-group">
+                <label for="quickEditCrop">Cây trồng:</label>
+                <select id="quickEditCrop">${cropOptions}</select>
+            </div>
+            <div class="form-group">
+                <label for="quickEditGarden">Khu vườn:</label>
+                <select id="quickEditGarden">${gardenOptions}</select>
+            </div>
+            <div class="form-group">
+                <label for="quickEditStatus">Trạng thái:</label>
+                <select id="quickEditStatus">
+                    <option value="Active" ${device.status === 'Active' ? 'selected' : ''}>Hoạt động</option>
+                    <option value="Inactive" ${device.status === 'Inactive' ? 'selected' : ''}>Ngừng hoạt động</option>
+                    <option value="Maintenance" ${device.status === 'Maintenance' ? 'selected' : ''}>Bảo trì</option>
+                </select>
+            </div>
+            <div class="modal-form-actions">
+                <button type="submit" class="btn-primary">Lưu thay đổi</button>
+                <button type="button" class="btn-secondary" onclick="closeDeviceModal()">Hủy</button>
+            </div>
+        </form>
+    `;
+}
+
+function buildDeviceModalContent(device) {
+    return `
+        <div class="modal-tab-header">
+            <button type="button" class="modal-tab-btn is-active" data-tab="edit">Chỉnh sửa</button>
+            <button type="button" class="modal-tab-btn" data-tab="history">Lịch sử cảm biến</button>
+        </div>
+        <div id="deviceTabEdit" class="modal-tab-pane is-active">
+            ${buildDeviceEditForm(device)}
+        </div>
+        <div id="deviceTabHistory" class="modal-tab-pane">
+            <div id="deviceHistoryContent">Đang tải lịch sử cảm biến...</div>
+        </div>
+    `;
+}
+
+function setDeviceModalTab(tabName) {
+    const editTabBtn = deviceModalContent.querySelector('[data-tab="edit"]');
+    const historyTabBtn = deviceModalContent.querySelector('[data-tab="history"]');
+    const editPane = document.getElementById('deviceTabEdit');
+    const historyPane = document.getElementById('deviceTabHistory');
+
+    if (!editTabBtn || !historyTabBtn || !editPane || !historyPane) {
+        return;
+    }
+
+    const showEdit = tabName === 'edit';
+    editTabBtn.classList.toggle('is-active', showEdit);
+    historyTabBtn.classList.toggle('is-active', !showEdit);
+    editPane.classList.toggle('is-active', showEdit);
+    historyPane.classList.toggle('is-active', !showEdit);
+}
+
+async function loadDeviceHistoryIntoModal(deviceId) {
+    const historyContainer = document.getElementById('deviceHistoryContent');
+    if (!historyContainer) return;
+
     try {
-        // Get device history (last 24 hours)
         const response = await fetch(`${API_BASE}/dashboard/history/${deviceId}?hours=24`, {
             method: 'GET',
             headers: getAuthHeaders()
         });
-        
+
         if (response.status === 401) {
             logout();
             return;
         }
-        
-        if (!response.ok) throw new Error('Không thể tải lịch sử thiết bị');
+
+        if (!response.ok) {
+            throw new Error('Không thể tải lịch sử cảm biến');
+        }
 
         const history = await response.json();
 
-        // Create modal content
-        let content = '<h3>Lịch sử cảm biến (24 giờ gần nhất)</h3>';
-
-        if (history.length === 0) {
-            content += '<p>Không có dữ liệu cảm biến</p>';
-        } else {
-            content += '<table style="width: 100%; border-collapse: collapse;">';
-            content += '<thead><tr><th>Thời gian</th><th>pH</th><th>TDS</th><th>Nhiệt độ (°C)</th><th>Độ ẩm (%)</th></tr></thead>';
-            content += '<tbody>';
-
-            history.forEach(log => {
-                const time = new Date(log.timestamp).toLocaleString('vi-VN');
-                content += `<tr>
-                    <td>${time}</td>
-                    <td>${log.ph?.toFixed(2) || '-'}</td>
-                    <td>${log.tds?.toFixed(0) || '-'}</td>
-                    <td>${log.waterTemperature?.toFixed(1) || '-'}</td>
-                    <td>${log.airHumidity?.toFixed(1) || '-'}</td>
-                </tr>`;
-            });
-
-            content += '</tbody></table>';
+        if (!history || history.length === 0) {
+            historyContainer.innerHTML = '<p>Không có dữ liệu cảm biến trong 24 giờ gần nhất</p>';
+            return;
         }
 
-        deviceModalContent.innerHTML = content;
-        deviceModalTitle.textContent = `Chi tiết thiết bị - ID: ${deviceId}`;
-        deviceModal.style.display = 'block';
+        let tableHtml = `
+            <div class="history-table-wrap">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Thời gian</th>
+                            <th>pH</th>
+                            <th>TDS</th>
+                            <th>Nhiệt độ (°C)</th>
+                            <th>Độ ẩm (%)</th>
+                            <th>Ánh sáng (lux)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        history.forEach(log => {
+            const time = new Date(log.timestamp).toLocaleString('vi-VN');
+            tableHtml += `
+                <tr>
+                    <td>${time}</td>
+                    <td>${Number.isFinite(log.ph) ? log.ph.toFixed(2) : '-'}</td>
+                    <td>${Number.isFinite(log.tds) ? log.tds.toFixed(0) : '-'}</td>
+                    <td>${Number.isFinite(log.waterTemperature) ? log.waterTemperature.toFixed(1) : '-'}</td>
+                    <td>${Number.isFinite(log.airHumidity) ? log.airHumidity.toFixed(1) : '-'}</td>
+                    <td>${Number.isFinite(log.lightIntensity) ? log.lightIntensity.toFixed(0) : '-'}</td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        historyContainer.innerHTML = tableHtml;
     } catch (error) {
-        console.error('Error loading device details:', error);
-        showError('Không thể tải chi tiết thiết bị');
+        console.error('Error loading device history:', error);
+        historyContainer.innerHTML = '<p>Không thể tải lịch sử cảm biến</p>';
+    }
+}
+
+function wireDeviceModalEvents(deviceId) {
+    const editTabBtn = deviceModalContent.querySelector('[data-tab="edit"]');
+    const historyTabBtn = deviceModalContent.querySelector('[data-tab="history"]');
+    const editForm = document.getElementById('quickEditDeviceForm');
+
+    editTabBtn?.addEventListener('click', () => setDeviceModalTab('edit'));
+    historyTabBtn?.addEventListener('click', () => setDeviceModalTab('history'));
+    editForm?.addEventListener('submit', handleQuickDeviceUpdate);
+
+    loadDeviceHistoryIntoModal(deviceId);
+}
+
+function closeDeviceModal() {
+    deviceModal.style.display = 'none';
+}
+
+function escapeHtml(input) {
+    return String(input)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Open device quick edit form
+async function openDeviceEditModal(deviceId) {
+    try {
+        if (!crops.length) {
+            await loadCrops();
+        }
+        if (!gardens.length) {
+            await loadGardens();
+        }
+
+        const device = dashboardDevices.find(d => d.id === deviceId);
+        if (!device) {
+            throw new Error('Không tìm thấy thiết bị trong dữ liệu hiện tại');
+        }
+
+        deviceModalContent.innerHTML = buildDeviceModalContent(device);
+        deviceModalTitle.textContent = `Chỉnh sửa thiết bị: ${device.name}`;
+        deviceModal.style.display = 'block';
+        wireDeviceModalEvents(deviceId);
+    } catch (error) {
+        console.error('Error opening edit form:', error);
+        showError(error.message || 'Không thể mở form chỉnh sửa thiết bị');
+    }
+}
+
+async function handleQuickDeviceUpdate(e) {
+    e.preventDefault();
+
+    const deviceId = parseInt(document.getElementById('quickEditDeviceId').value, 10);
+    const payload = {
+        name: document.getElementById('quickEditDeviceName').value.trim(),
+        currentCropId: document.getElementById('quickEditCrop').value
+            ? parseInt(document.getElementById('quickEditCrop').value, 10)
+            : null,
+        gardenId: document.getElementById('quickEditGarden').value
+            ? parseInt(document.getElementById('quickEditGarden').value, 10)
+            : null,
+        status: document.getElementById('quickEditStatus').value
+    };
+
+    if (!payload.name) {
+        showError('Tên thiết bị không được để trống');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/device/${deviceId}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+        });
+
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || 'Không thể cập nhật thiết bị');
+        }
+
+        closeDeviceModal();
+        showSuccess('Đã cập nhật thiết bị');
+        await loadDashboardData();
+    } catch (error) {
+        console.error('Error updating device from dashboard:', error);
+        showError(error.message || 'Không thể cập nhật thiết bị');
     }
 }
 
