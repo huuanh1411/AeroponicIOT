@@ -21,6 +21,19 @@ public class SecurityAttributesTests
     }
 
     [Fact]
+    public void NotificationEmailHealth_RequiresAdminPolicy()
+    {
+        var method = typeof(NotificationController).GetMethod("GetEmailHealth");
+        Assert.NotNull(method);
+
+        var attribute = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .SingleOrDefault(a => a.Policy == "AdminOnly");
+
+        Assert.NotNull(attribute);
+    }
+
+    [Fact]
     public void AuthenticationRegister_HasRateLimiterPolicy()
     {
         var method = typeof(AuthenticationController).GetMethod("Register");

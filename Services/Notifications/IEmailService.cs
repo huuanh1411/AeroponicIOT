@@ -16,6 +16,11 @@ public interface IEmailService
     Task<bool> SendBulkEmailAsync(List<string> recipients, string subject, string htmlBody, string? plainTextBody = null);
 
     /// <summary>
+    /// Check SMTP configuration and optionally test connectivity/authentication.
+    /// </summary>
+    Task<EmailHealthCheckResult> CheckHealthAsync(bool testConnectivity = true, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Check if email service is configured
     /// </summary>
     bool IsConfigured { get; }

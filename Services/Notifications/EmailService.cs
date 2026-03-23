@@ -12,6 +12,7 @@ namespace AeroponicIOT.Services.Notifications;
 public class EmailService : IEmailService
 {
     private readonly ILogger<EmailService> _logger;
+    private readonly bool _enabled;
     private readonly string? _smtpHost;
     private readonly int _smtpPort;
     private readonly string? _smtpUsername;
@@ -19,13 +20,14 @@ public class EmailService : IEmailService
     private readonly string? _fromEmail;
     private readonly string? _fromName;
 
-    public bool IsConfigured => !string.IsNullOrEmpty(_smtpHost) && !string.IsNullOrEmpty(_fromEmail);
+    public bool IsConfigured => _enabled && !string.IsNullOrEmpty(_smtpHost) && !string.IsNullOrEmpty(_fromEmail);
 
     public EmailService(IOptions<EmailSettingsOptions> emailOptions, ILogger<EmailService> logger)
     {
         _logger = logger;
 
         var settings = emailOptions.Value;
+        _enabled = settings.Enabled;
         _smtpHost = settings.SmtpHost;
         _smtpPort = settings.SmtpPort;
         _smtpUsername = settings.SmtpUsername;
@@ -33,7 +35,11 @@ public class EmailService : IEmailService
         _fromEmail = settings.FromEmail;
         _fromName = settings.FromName;
 
-        if (IsConfigured)
+        if (!_enabled)
+        {
+            _logger.LogInformation("Email service is disabled via EmailSettings:Enabled");
+        }
+        else if (IsConfigured)
         {
             _logger.LogInformation("Email service configured with SMTP host: {Host}:{Port}", _smtpHost, _smtpPort);
         }
@@ -148,6 +154,100 @@ public class EmailService : IEmailService
         {
             _logger.LogError(ex, "Error in bulk email operation");
             return false;
+        }
+    }
+
+    public async Task<EmailHealthCheckResult> CheckHealthAsync(bool testConnectivity = true, CancellationToken cancellationToken = default)
+    {
+        if (!_enabled)
+        {
+            return new EmailHealthCheckResult
+            {
+                Enabled = false,
+                IsConfigured = false,
+                ConnectivityTested = false,
+                CanConnect = false,
+                CanAuthenticate = false,
+                SmtpHost = _smtpHost,
+                SmtpPort = _smtpPort,
+                Message = "Email sending is disabled (EmailSettings:Enabled = false)."
+            };
+        }
+
+        if (!IsConfigured)
+        {
+            return new EmailHealthCheckResult
+            {
+                Enabled = true,
+                IsConfigured = false,
+                ConnectivityTested = false,
+                CanConnect = false,
+                CanAuthenticate = false,
+                SmtpHost = _smtpHost,
+                SmtpPort = _smtpPort,
+                Message = "Email settings are incomplete. Configure SMTP host and from email."
+            };
+        }
+
+        if (!testConnectivity)
+        {
+            return new EmailHealthCheckResult
+            {
+                Enabled = true,
+                IsConfigured = true,
+                ConnectivityTested = false,
+                CanConnect = false,
+                CanAuthenticate = false,
+                SmtpHost = _smtpHost,
+                SmtpPort = _smtpPort,
+                Message = "Email is enabled and configured. Connectivity test skipped."
+            };
+        }
+
+        try
+        {
+            using var client = new SmtpClient();
+            var secureSocketOption = _smtpPort == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+
+            await client.ConnectAsync(_smtpHost, _smtpPort, secureSocketOption, cancellationToken);
+
+            var canAuthenticate = false;
+            if (!string.IsNullOrWhiteSpace(_smtpUsername) && !string.IsNullOrWhiteSpace(_smtpPassword))
+            {
+                await client.AuthenticateAsync(_smtpUsername, _smtpPassword, cancellationToken);
+                canAuthenticate = true;
+            }
+
+            await client.DisconnectAsync(true, cancellationToken);
+
+            return new EmailHealthCheckResult
+            {
+                Enabled = true,
+                IsConfigured = true,
+                ConnectivityTested = true,
+                CanConnect = true,
+                CanAuthenticate = canAuthenticate,
+                SmtpHost = _smtpHost,
+                SmtpPort = _smtpPort,
+                Message = canAuthenticate
+                    ? "SMTP connectivity and authentication succeeded."
+                    : "SMTP connectivity succeeded (no SMTP credentials configured)."
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Email health check failed for SMTP host {Host}:{Port}", _smtpHost, _smtpPort);
+            return new EmailHealthCheckResult
+            {
+                Enabled = true,
+                IsConfigured = true,
+                ConnectivityTested = true,
+                CanConnect = false,
+                CanAuthenticate = false,
+                SmtpHost = _smtpHost,
+                SmtpPort = _smtpPort,
+                Message = $"SMTP health check failed: {ex.Message}"
+            };
         }
     }
 }

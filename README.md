@@ -286,7 +286,7 @@ The system provides multi-channel notifications to keep users informed of alerts
 2. **Email Notifications**
    - Automatic email alerts for system events
    - Detailed HTML-formatted emails
-   - Requires SMTP configuration
+  - Requires SMTP configuration and `Enabled: true`
 
 ### Configuration Email Notifications
 
@@ -319,6 +319,7 @@ For Gmail SMTP:
 | `/api/notification/unread` | GET | Get unread notifications for current user |
 | `/api/notification/{id}/read` | POST | Mark notification as read |
 | `/api/notification/clear` | DELETE | Clear all notifications for current user |
+| `/api/notification/email-health?testConnectivity=true` | GET | Check email configuration and optional SMTP connectivity/auth (admin only) |
 | `/api/notification/test-email` | POST | Send test email notification |
 
 ### Notification Types

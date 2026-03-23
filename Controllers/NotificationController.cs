@@ -12,12 +12,33 @@ namespace AeroponicIOT.Controllers;
 public class NotificationController : ControllerBase
 {
     private readonly INotificationService _notificationService;
+    private readonly IEmailService _emailService;
     private readonly ILogger<NotificationController> _logger;
 
-    public NotificationController(INotificationService notificationService, ILogger<NotificationController> logger)
+    public NotificationController(INotificationService notificationService, IEmailService emailService, ILogger<NotificationController> logger)
     {
         _notificationService = notificationService;
+        _emailService = emailService;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Get email service health status (admin only)
+    /// </summary>
+    [HttpGet("email-health")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> GetEmailHealth([FromQuery] bool testConnectivity = true, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var health = await _emailService.CheckHealthAsync(testConnectivity, cancellationToken);
+            return Ok(ApiResponse.Success(health, "Email health check completed"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking email health");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error checking email health");
+        }
     }
 
     /// <summary>
