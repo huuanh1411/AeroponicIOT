@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AeroponicIOT.DTOs;
 
 /// <summary>
@@ -5,7 +7,12 @@ namespace AeroponicIOT.DTOs;
 /// </summary>
 public class LoginRequest
 {
+    [Required]
+    [StringLength(100, MinimumLength = 3)]
     public string? Username { get; set; }
+
+    [Required]
+    [StringLength(128, MinimumLength = 8)]
     public string? Password { get; set; }
 }
 
@@ -14,11 +21,23 @@ public class LoginRequest
 /// </summary>
 public class RegisterRequest
 {
+    [Required]
+    [StringLength(100, MinimumLength = 3)]
     public string? Username { get; set; }
+
+    [Required]
+    [EmailAddress]
+    [StringLength(256)]
     public string? Email { get; set; }
+
+    [Required]
+    [StringLength(128, MinimumLength = 8)]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$", ErrorMessage = "Password must be at least 8 characters and include upper, lower, and numeric characters")]
     public string? Password { get; set; }
+
     // Role is accepted in the DTO but will be ignored for unauthenticated requests.
     // Only an authenticated Administrator may assign a role on registration.
+    [StringLength(50)]
     public string? Role { get; set; }
 }
 

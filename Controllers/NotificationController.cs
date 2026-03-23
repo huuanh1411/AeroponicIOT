@@ -1,4 +1,5 @@
 using AeroponicIOT.Services.Notifications;
+using AeroponicIOT.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -30,21 +31,21 @@ public class NotificationController : ControllerBase
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Unauthorized(new { message = "User not authenticated" });
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             var notifications = await _notificationService.GetUnreadNotificationsAsync(userId);
             
-            return Ok(new
+            return Ok(ApiResponse.Success(new
             {
                 unreadCount = notifications.Count,
                 notifications = notifications
-            });
+            }, "Unread notifications retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving unread notifications");
-            return StatusCode(500, new { message = "Internal server error" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving unread notifications");
         }
     }
 
@@ -59,17 +60,17 @@ public class NotificationController : ControllerBase
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Unauthorized(new { message = "User not authenticated" });
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             await _notificationService.MarkAsReadAsync(notificationId, userId);
 
-            return Ok(new { message = "Notification marked as read" });
+            return Ok(ApiResponse.Success<object?>(null, "Notification marked as read"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error marking notification as read");
-            return StatusCode(500, new { message = "Internal server error" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error marking notification as read");
         }
     }
 
@@ -84,17 +85,17 @@ public class NotificationController : ControllerBase
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Unauthorized(new { message = "User not authenticated" });
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             await _notificationService.ClearNotificationsAsync(userId);
             
-            return Ok(new { message = "All notifications cleared" });
+            return Ok(ApiResponse.Success<object?>(null, "All notifications cleared"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error clearing notifications");
-            return StatusCode(500, new { message = "Internal server error" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error clearing notifications");
         }
     }
 
@@ -110,7 +111,7 @@ public class NotificationController : ControllerBase
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Unauthorized(new { message = "User not authenticated" });
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             await _notificationService.SendNotificationAsync(
@@ -120,12 +121,17 @@ public class NotificationController : ControllerBase
                 NotificationType.Info
             );
 
-            return Ok(new { message = "Test notification sent" });
+            return Ok(ApiResponse.Success<object?>(null, "Test notification sent"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending test notification");
-            return StatusCode(500, new { message = "Internal server error" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error sending test notification");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return Problem(statusCode: statusCode, title: title, detail: detail);
     }
 }

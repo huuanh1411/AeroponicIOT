@@ -45,4 +45,56 @@ public class SecurityAttributesTests
 
         Assert.NotNull(attribute);
     }
+
+    [Fact]
+    public void AuthenticationMe_RequiresAuthorization()
+    {
+        var method = typeof(AuthenticationController).GetMethod("GetCurrentUser");
+        Assert.NotNull(method);
+
+        var hasAuthorize = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Any();
+
+        Assert.True(hasAuthorize);
+    }
+
+    [Fact]
+    public void DevicePending_RequiresAdminPolicy()
+    {
+        var method = typeof(DeviceController).GetMethod("GetPendingDevices");
+        Assert.NotNull(method);
+
+        var attribute = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .SingleOrDefault(a => a.Policy == "AdminOnly");
+
+        Assert.NotNull(attribute);
+    }
+
+    [Fact]
+    public void DeviceSelfRegister_HasOnboardingRateLimiterPolicy()
+    {
+        var method = typeof(DeviceController).GetMethod("SelfRegister");
+        Assert.NotNull(method);
+
+        var attribute = method!.GetCustomAttributes(typeof(EnableRateLimitingAttribute), inherit: true)
+            .Cast<EnableRateLimitingAttribute>()
+            .SingleOrDefault(a => a.PolicyName == "device-onboarding");
+
+        Assert.NotNull(attribute);
+    }
+
+    [Fact]
+    public void DeviceClaim_HasOnboardingRateLimiterPolicy()
+    {
+        var method = typeof(DeviceController).GetMethod("ClaimDevice");
+        Assert.NotNull(method);
+
+        var attribute = method!.GetCustomAttributes(typeof(EnableRateLimitingAttribute), inherit: true)
+            .Cast<EnableRateLimitingAttribute>()
+            .SingleOrDefault(a => a.PolicyName == "device-onboarding");
+
+        Assert.NotNull(attribute);
+    }
 }

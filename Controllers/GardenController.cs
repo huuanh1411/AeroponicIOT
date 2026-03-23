@@ -40,12 +40,12 @@ public class GardenController : ControllerBase
                 DeviceCount = g.Devices?.Count ?? 0
             }).ToList();
 
-            return Ok(dtos);
+            return Ok(ApiResponse.Success(dtos, "Gardens retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving gardens");
-            return StatusCode(500, new { detail = "Error retrieving gardens" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving gardens");
         }
     }
 
@@ -60,7 +60,7 @@ public class GardenController : ControllerBase
 
             if (garden == null)
             {
-                return NotFound(new { detail = "Garden not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Garden not found");
             }
 
             var dto = new GardenDto
@@ -73,12 +73,12 @@ public class GardenController : ControllerBase
                 DeviceCount = garden.Devices?.Count ?? 0
             };
 
-            return Ok(dto);
+            return Ok(ApiResponse.Success(dto, "Garden retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving garden {GardenId}", id);
-            return StatusCode(500, new { detail = "Error retrieving garden" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving garden");
         }
     }
 
@@ -89,7 +89,7 @@ public class GardenController : ControllerBase
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return ValidationProblem(ModelState);
             }
 
             var garden = new Garden
@@ -107,12 +107,12 @@ public class GardenController : ControllerBase
             dto.CreatedAt = garden.CreatedAt;
             dto.DeviceCount = 0;
 
-            return CreatedAtAction(nameof(GetGardenById), new { id = garden.Id }, dto);
+            return CreatedAtAction(nameof(GetGardenById), new { id = garden.Id }, ApiResponse.Success(dto, "Garden created"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating garden");
-            return StatusCode(500, new { detail = "Error creating garden" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error creating garden");
         }
     }
 
@@ -125,7 +125,7 @@ public class GardenController : ControllerBase
             var garden = await _context.Gardens.FindAsync(id);
             if (garden == null)
             {
-                return NotFound(new { detail = "Garden not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Garden not found");
             }
 
             garden.Name = dto.Name;
@@ -139,12 +139,12 @@ public class GardenController : ControllerBase
             dto.CreatedAt = garden.CreatedAt;
             dto.DeviceCount = await _context.Devices.CountAsync(d => d.GardenId == garden.Id);
 
-            return Ok(dto);
+            return Ok(ApiResponse.Success(dto, "Garden updated"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating garden {GardenId}", id);
-            return StatusCode(500, new { detail = "Error updating garden" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error updating garden");
         }
     }
 
@@ -160,7 +160,7 @@ public class GardenController : ControllerBase
 
             if (garden == null)
             {
-                return NotFound(new { detail = "Garden not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Garden not found");
             }
 
             // Detach devices but do not delete them.
@@ -172,12 +172,12 @@ public class GardenController : ControllerBase
             _context.Gardens.Remove(garden);
             await _context.SaveChangesAsync();
 
-            return Ok(new { detail = "Garden deleted successfully" });
+            return Ok(ApiResponse.Success<object?>(null, "Garden deleted successfully"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting garden {GardenId}", id);
-            return StatusCode(500, new { detail = "Error deleting garden" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error deleting garden");
         }
     }
 
@@ -189,7 +189,7 @@ public class GardenController : ControllerBase
             var exists = await _context.Gardens.AnyAsync(g => g.Id == id);
             if (!exists)
             {
-                return NotFound(new { detail = "Garden not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Garden not found");
             }
 
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -199,7 +199,7 @@ public class GardenController : ControllerBase
             if (userRole != "Administrator")
             {
                 if (!int.TryParse(userIdClaim, out var userIdInt))
-                    return Unauthorized();
+                    return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
 
                 devicesQuery = devicesQuery.Where(d => d.UserId == userIdInt);
             }
@@ -219,13 +219,18 @@ public class GardenController : ControllerBase
                 LastSeen = d.LastSeen
             }).ToList();
 
-            return Ok(dtos);
+            return Ok(ApiResponse.Success(dtos, "Garden devices retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving devices for garden {GardenId}", id);
-            return StatusCode(500, new { detail = "Error retrieving garden devices" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving garden devices");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return Problem(statusCode: statusCode, title: title, detail: detail);
     }
 }
 

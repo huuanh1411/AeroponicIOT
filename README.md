@@ -77,6 +77,31 @@ curl -X POST http://localhost:5062/api/sensor \
   }'
 ```
 
+### Authentication Response Compatibility
+
+Authentication endpoints now return a standard success envelope by default:
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "token": "...",
+    "username": "farmer-1",
+    "role": "Farmer",
+    "userId": 1,
+    "expiresAt": "2026-03-23T00:00:00Z"
+  },
+  "timestamp": "2026-03-23T00:00:00Z"
+}
+```
+
+For backward compatibility with legacy clients, send either:
+- Query: `?legacyAuthResponse=true`
+- Header: `X-Legacy-Auth-Response: true`
+
+When enabled, `/api/authentication/register`, `/api/authentication/login`, and `/api/authentication/me` return their previous payload shape.
+
 ### CORS Configuration
 
 The API uses an allowlist from `Cors:AllowedOrigins`.

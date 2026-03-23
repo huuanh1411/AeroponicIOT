@@ -1,6 +1,7 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,12 @@ namespace AeroponicIOT.Controllers;
 [Route("api/[controller]")]
 public class AuthenticationController : ControllerBase
 {
+    private static readonly Dictionary<string, string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Farmer"] = "Farmer",
+        ["Administrator"] = "Administrator"
+    };
+
     private readonly ApplicationDbContext _context;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthenticationController> _logger;
@@ -61,7 +68,16 @@ public class AuthenticationController : ControllerBase
             var roleToAssign = "Farmer";
             if (User?.Identity != null && User.Identity.IsAuthenticated && User.IsInRole("Administrator") && !string.IsNullOrWhiteSpace(request.Role))
             {
-                roleToAssign = request.Role!;
+                if (!TryNormalizeRole(request.Role, out var normalizedRole))
+                {
+                    return BadRequest(new TokenResponse
+                    {
+                        Success = false,
+                        Message = "Invalid role. Allowed roles: Farmer, Administrator"
+                    });
+                }
+
+                roleToAssign = normalizedRole;
             }
 
             // Create new user
@@ -80,14 +96,23 @@ public class AuthenticationController : ControllerBase
             _logger.LogInformation("User {Username} registered successfully with role {Role}", 
                 user.Username, user.Role);
 
-            return Ok(new TokenResponse
+            var legacyResponse = new TokenResponse
             {
                 Success = true,
                 Message = "User registered successfully",
                 Username = user.Username,
                 Role = user.Role,
                 UserId = user.Id
-            });
+            };
+
+            var payload = new
+            {
+                username = user.Username,
+                role = user.Role,
+                userId = user.Id
+            };
+
+            return AuthSuccess(legacyResponse, payload, "User registered successfully");
         }
         catch (Exception ex)
         {
@@ -139,10 +164,12 @@ public class AuthenticationController : ControllerBase
 
             // Generate JWT token
             var token = GenerateJwtToken(user);
+            var expiresAt = DateTime.UtcNow.AddMinutes(
+                int.Parse(_configuration.GetSection("JwtSettings")["ExpirationMinutes"] ?? "1440"));
 
             _logger.LogInformation("User {Username} logged in successfully", user.Username);
 
-            return Ok(new TokenResponse
+            var legacyResponse = new TokenResponse
             {
                 Success = true,
                 Message = "Login successful",
@@ -150,9 +177,19 @@ public class AuthenticationController : ControllerBase
                 Username = user.Username,
                 Role = user.Role,
                 UserId = user.Id,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(
-                    int.Parse(_configuration.GetSection("JwtSettings")["ExpirationMinutes"] ?? "1440"))
-            });
+                ExpiresAt = expiresAt
+            };
+
+            var payload = new
+            {
+                token,
+                username = user.Username,
+                role = user.Role,
+                userId = user.Id,
+                expiresAt
+            };
+
+            return AuthSuccess(legacyResponse, payload, "Login successful");
         }
         catch (Exception ex)
         {
@@ -169,6 +206,7 @@ public class AuthenticationController : ControllerBase
     /// Get current user info (requires authentication)
     /// </summary>
     [HttpGet("me")]
+    [Authorize]
     public async Task<IActionResult> GetCurrentUser()
     {
         try
@@ -176,16 +214,16 @@ public class AuthenticationController : ControllerBase
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Unauthorized(new { message = "User not authenticated" });
+                return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "User not authenticated");
             }
 
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
             {
-                return NotFound(new { message = "User not found" });
+                return Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: "User not found");
             }
 
-            return Ok(new UserInfoDto
+            var userInfo = new UserInfoDto
             {
                 Id = user.Id,
                 Username = user.Username,
@@ -193,13 +231,61 @@ public class AuthenticationController : ControllerBase
                 Role = user.Role,
                 CreatedAt = user.CreatedAt,
                 LastLogin = user.LastLogin
-            });
+            };
+
+            if (UseLegacyAuthResponse())
+            {
+                return Ok(userInfo);
+            }
+
+            return Ok(ApiResponse.Success(userInfo, "Current user retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving current user");
-            return StatusCode(500, new { message = "Internal server error" });
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: "Error retrieving current user");
         }
+    }
+
+    private static bool TryNormalizeRole(string? role, out string normalizedRole)
+    {
+        normalizedRole = string.Empty;
+        if (string.IsNullOrWhiteSpace(role))
+        {
+            return false;
+        }
+
+        return AllowedRoles.TryGetValue(role.Trim(), out normalizedRole!);
+    }
+
+    private IActionResult AuthSuccess<TLegacy, TData>(TLegacy legacyPayload, TData data, string message)
+    {
+        if (UseLegacyAuthResponse())
+        {
+            return Ok(legacyPayload);
+        }
+
+        return Ok(ApiResponse.Success(data, message));
+    }
+
+    private bool UseLegacyAuthResponse()
+    {
+        var queryFlag = Request.Query["legacyAuthResponse"].FirstOrDefault();
+        var headerFlag = Request.Headers["X-Legacy-Auth-Response"].FirstOrDefault();
+
+        return IsTruthy(queryFlag) || IsTruthy(headerFlag);
+    }
+
+    private static bool IsTruthy(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

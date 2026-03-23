@@ -25,10 +25,25 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Configure Device properties
+        // Unique constraints for critical identity fields.
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Username)
+            .IsUnique()
+            .HasFilter("[username] IS NOT NULL");
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
+            .IsUnique()
+            .HasFilter("[email] IS NOT NULL");
+
         modelBuilder.Entity<Device>()
-            .Property(d => d.UserId)
-            .HasColumnName("user_id");
+            .HasIndex(d => d.MacAddress)
+            .IsUnique();
+
+        modelBuilder.Entity<Device>()
+            .HasIndex(d => d.ClaimCode)
+            .IsUnique()
+            .HasFilter("[claim_code] IS NOT NULL");
 
         // Configure relationships
         modelBuilder.Entity<Device>()
@@ -43,9 +58,9 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(d => d.GardenId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        modelBuilder.Entity<Device>()
-            .HasOne(d => d.User)
-            .WithMany(u => u.Devices)
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.Devices)
+            .WithOne(d => d.User)
             .HasForeignKey(d => d.UserId)
             .OnDelete(DeleteBehavior.SetNull);
 
@@ -79,6 +94,23 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(a => a.DeviceId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Explicit precision avoids provider warnings and prevents unintended truncation.
+        modelBuilder.Entity<AutomationRule>()
+            .Property(r => r.ConditionValue)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<CropStage>()
+            .Property(s => s.PhMin)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<CropStage>()
+            .Property(s => s.PhMax)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<SensorLog>()
+            .Property(s => s.Ph)
+            .HasPrecision(18, 2);
 
         // Note: Removed seed data since we're connecting to existing database
     }

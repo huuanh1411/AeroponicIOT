@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AeroponicIOT.DTOs;
 
 public class DeviceDto
@@ -18,25 +20,49 @@ public class DeviceDto
 
 public class CreateDeviceDto
 {
+    [Required]
+    [StringLength(100, MinimumLength = 1)]
     public string Name { get; set; } = string.Empty;
+
+    [Required]
+    [RegularExpression(@"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", ErrorMessage = "MAC address must use AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF format")]
     public string MacAddress { get; set; } = string.Empty;
+
+    [Range(1, int.MaxValue)]
     public int? CurrentCropId { get; set; }
+
+    [Range(1, int.MaxValue)]
     public int? GardenId { get; set; }
 }
 
 public class UpdateDeviceDto
 {
+    [StringLength(100, MinimumLength = 1)]
     public string? Name { get; set; }
+
+    [Range(1, int.MaxValue)]
     public int? CurrentCropId { get; set; }
+
+    [Range(1, int.MaxValue)]
     public int? GardenId { get; set; }
+
+    [StringLength(20)]
     public string? Status { get; set; }
 }
 
 public class DeviceSelfRegisterRequestDto
 {
+    [Required]
+    [RegularExpression(@"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", ErrorMessage = "MAC address must use AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF format")]
     public string MacAddress { get; set; } = string.Empty;
+
+    [StringLength(100)]
     public string? DeviceName { get; set; }
+
+    [StringLength(100)]
     public string? ChipId { get; set; }
+
+    [StringLength(50)]
     public string? FirmwareVersion { get; set; }
 }
 
@@ -52,9 +78,17 @@ public class DeviceSelfRegisterResponseDto
 
 public class ClaimDeviceRequestDto
 {
+    [Required]
+    [RegularExpression(@"^[A-Z2-9]{6}$", ErrorMessage = "Claim code must be a 6-character uppercase code")]
     public string ClaimCode { get; set; } = string.Empty;
+
+    [StringLength(100)]
     public string? Name { get; set; }
+
+    [Range(1, int.MaxValue)]
     public int? CurrentCropId { get; set; }
+
+    [Range(1, int.MaxValue)]
     public int? GardenId { get; set; }
 }
 

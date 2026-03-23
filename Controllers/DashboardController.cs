@@ -23,43 +23,72 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("latest")]
-    public async Task<IActionResult> GetLatestData([FromQuery] int? gardenId = null)
+    public async Task<IActionResult> GetLatestData([FromQuery] int? gardenId = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         try
         {
+            page = Math.Max(page, 1);
+            pageSize = Math.Clamp(pageSize, 1, 200);
+
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
             IQueryable<Device> devicesQuery;
             if (userRole == "Administrator")
             {
-                devicesQuery = _context.Devices;
+                devicesQuery = _context.Devices.AsNoTracking();
             }
             else if (int.TryParse(userIdClaim, out var userIdInt))
             {
-                devicesQuery = _context.Devices.Where(d => d.UserId == userIdInt);
+                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == userIdInt);
             }
             else
             {
-                return Unauthorized();
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
-
-            devicesQuery = devicesQuery
-                .Include(d => d.Crop)
-                .Include(d => d.Garden)
-                .Include(d => d.SensorLogs.OrderByDescending(sl => sl.Timestamp).Take(1))
-                .AsQueryable();
 
             if (gardenId.HasValue)
             {
                 devicesQuery = devicesQuery.Where(d => d.GardenId == gardenId.Value);
             }
 
-            var devices = await devicesQuery.ToListAsync();
+            var totalDevices = await devicesQuery.CountAsync();
+            var activeDevicesCount = await devicesQuery.CountAsync(d =>
+                d.Status != null && (d.Status.ToLower() == "active" || d.Status.ToLower() == "online"));
+
+            var pagedDevices = await devicesQuery
+                .OrderBy(d => d.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(d => new DeviceStatusDto
+                {
+                    Id = d.Id,
+                    Name = d.DeviceName ?? "Unknown Device",
+                    MacAddress = d.MacAddress,
+                    GardenId = d.GardenId,
+                    GardenName = d.Garden != null ? d.Garden.Name : null,
+                    IsActive = d.Status != null && (d.Status.ToLower() == "active" || d.Status.ToLower() == "online"),
+                    LastSeen = d.LastSeen,
+                    CropName = d.Crop != null ? d.Crop.Name : null,
+                    LatestSensorData = _context.SensorLogs
+                        .Where(sl => sl.DeviceId == d.Id)
+                        .OrderByDescending(sl => sl.Timestamp)
+                        .Select(sl => new SensorDataDto
+                        {
+                            MacAddress = d.MacAddress,
+                            Ph = (double?)sl.Ph,
+                            Tds = sl.TdsPpm,
+                            WaterTemperature = sl.WaterTemp,
+                            AirHumidity = sl.Humidity,
+                            LightIntensity = sl.LightIntensity
+                        })
+                        .FirstOrDefault()
+                })
+                .ToListAsync();
 
             var activeAlertsQuery = _context.Alerts
+                .AsNoTracking()
                 .Where(a => !a.IsResolved)
-                .Include(a => a.Device)
                 .AsQueryable();
 
             if (userRole != "Administrator" && int.TryParse(userIdClaim, out var alertsUserId))
@@ -75,43 +104,32 @@ public class DashboardController : ControllerBase
             var activeAlerts = await activeAlertsQuery
                 .OrderByDescending(a => a.Timestamp)
                 .Take(10)
-                .ToListAsync();
-
-            var deviceStatuses = devices.Select(d => new DeviceStatusDto
-            {
-                Id = d.Id,
-                Name = d.Name,
-                MacAddress = d.MacAddress,
-                GardenId = d.GardenId,
-                GardenName = d.Garden?.Name,
-                IsActive = d.IsActive,
-                LastSeen = d.LastSeen,
-                CropName = d.Crop?.Name,
-                LatestSensorData = d.SensorLogs.FirstOrDefault() != null ? new SensorDataDto
+                .Select(a => new Alert
                 {
-                    MacAddress = d.MacAddress,
-                    Ph = (double?)d.SensorLogs.First().Ph,
-                    Tds = d.SensorLogs.First().Tds,
-                    WaterTemperature = d.SensorLogs.First().WaterTemperature,
-                    AirHumidity = d.SensorLogs.First().AirHumidity,
-                    LightIntensity = d.SensorLogs.First().LightIntensity
-                } : null
-            }).ToList();
+                    Id = a.Id,
+                    DeviceId = a.DeviceId,
+                    Timestamp = a.Timestamp,
+                    AlertType = a.AlertType,
+                    Message = a.Message,
+                    Severity = a.Severity,
+                    IsResolved = a.IsResolved
+                })
+                .ToListAsync();
 
             var dashboard = new DashboardDto
             {
-                Devices = deviceStatuses,
+                Devices = pagedDevices,
                 ActiveAlerts = activeAlerts,
-                TotalDevices = devices.Count,
-                ActiveDevices = devices.Count(d => d.IsActive)
+                TotalDevices = totalDevices,
+                ActiveDevices = activeDevicesCount
             };
 
-            return Ok(dashboard);
+            return Ok(ApiResponse.Success(dashboard, "Dashboard data retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving dashboard data");
-            return StatusCode(500, "Internal server error");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving dashboard data");
         }
     }
 
@@ -127,25 +145,38 @@ public class DashboardController : ControllerBase
             IQueryable<Device> devicesQuery;
             if (userRole == "Administrator")
             {
-                devicesQuery = _context.Devices;
+                devicesQuery = _context.Devices.AsNoTracking();
             }
             else if (int.TryParse(userIdClaim, out var userIdInt))
             {
-                devicesQuery = _context.Devices.Where(d => d.UserId == userIdInt);
+                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == userIdInt);
             }
             else
             {
-                return Unauthorized();
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             var devices = await devicesQuery
-                .Include(d => d.SensorLogs.OrderByDescending(sl => sl.Timestamp).Take(1))
+                .Select(d => new
+                {
+                    d.Status,
+                    LatestSensor = _context.SensorLogs
+                        .Where(sl => sl.DeviceId == d.Id)
+                        .OrderByDescending(sl => sl.Timestamp)
+                        .Select(sl => new
+                        {
+                            sl.Ph,
+                            Tds = sl.TdsPpm,
+                            WaterTemperature = sl.WaterTemp
+                        })
+                        .FirstOrDefault()
+                })
                 .ToListAsync();
 
             // Calculate averages from latest sensor data
             var latestSensors = devices
-                .Where(d => d.SensorLogs.Any())
-                .Select(d => d.SensorLogs.First())
+                .Where(d => d.LatestSensor != null)
+                .Select(d => d.LatestSensor!)
                 .ToList();
 
             var avgPh = latestSensors
@@ -158,19 +189,22 @@ public class DashboardController : ControllerBase
             var avgTds = latestSensors
                 .Select(s => s.Tds)
                 .Where(v => v.HasValue)
-                .Select(v => v!.Value)
+                .Select(v => (double)v!.Value)
                 .DefaultIfEmpty(0.0)
                 .Average();
 
             var avgTemp = latestSensors
                 .Select(s => s.WaterTemperature)
                 .Where(v => v.HasValue)
-                .Select(v => v!.Value)
+                .Select(v => (double)v!.Value)
                 .DefaultIfEmpty(0.0)
                 .Average();
 
             // Calculate system health percentage
-            var activeDevices = devices.Count(d => d.IsActive);
+            var activeDevices = devices.Count(d =>
+                d.Status != null &&
+                (d.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
+                 d.Status.Equals("online", StringComparison.OrdinalIgnoreCase)));
             var totalDevices = devices.Count;
             var deviceHealth = totalDevices > 0 ? (activeDevices * 100.0) / totalDevices : 0;
 
@@ -202,20 +236,23 @@ public class DashboardController : ControllerBase
                 LatestUpdate = DateTime.UtcNow
             };
 
-            return Ok(kpi);
+            return Ok(ApiResponse.Success(kpi, "KPI retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error calculating KPI");
-            return StatusCode(500, new { detail = "Error calculating KPI" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error calculating KPI");
         }
     }
 
     [HttpGet("health")]
-    public async Task<IActionResult> GetDeviceHealth()
+    public async Task<IActionResult> GetDeviceHealth([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         try
         {
+            page = Math.Max(page, 1);
+            pageSize = Math.Clamp(pageSize, 1, 200);
+
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
@@ -223,25 +260,43 @@ public class DashboardController : ControllerBase
             IQueryable<Device> devicesQuery;
             if (userRole == "Administrator")
             {
-                devicesQuery = _context.Devices;
+                devicesQuery = _context.Devices.AsNoTracking();
             }
             else if (int.TryParse(userIdClaim, out var userIdInt))
             {
-                devicesQuery = _context.Devices.Where(d => d.UserId == userIdInt);
+                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == userIdInt);
             }
             else
             {
-                return Unauthorized();
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             var devices = await devicesQuery
-                .Include(d => d.SensorLogs.OrderByDescending(sl => sl.Timestamp).Take(1))
+                .OrderBy(d => d.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(d => new
+                {
+                    d.Id,
+                    Name = d.DeviceName ?? "Unknown Device",
+                    d.LastSeen,
+                    LatestSensor = _context.SensorLogs
+                        .Where(sl => sl.DeviceId == d.Id)
+                        .OrderByDescending(sl => sl.Timestamp)
+                        .Select(sl => new
+                        {
+                            sl.Ph,
+                            Tds = sl.TdsPpm,
+                            WaterTemperature = sl.WaterTemp
+                        })
+                        .FirstOrDefault()
+                })
                 .ToListAsync();
 
             var deviceHealth = devices.Select(d =>
             {
                 // Determine health status based on latest sensor data and activity
-                var lastSensor = d.SensorLogs.FirstOrDefault();
+                var lastSensor = d.LatestSensor;
                 var lastSeenMinutesAgo = d.LastSeen.HasValue 
                     ? (DateTime.UtcNow - d.LastSeen.Value).TotalMinutes 
                     : double.MaxValue;
@@ -273,12 +328,12 @@ public class DashboardController : ControllerBase
                 };
             }).ToList();
 
-            return Ok(deviceHealth);
+            return Ok(ApiResponse.Success(deviceHealth, "Device health retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting device health");
-            return StatusCode(500, new { detail = "Error getting device health" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error getting device health");
         }
     }
 
@@ -293,9 +348,9 @@ public class DashboardController : ControllerBase
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
-            var device = await _context.Devices.FindAsync(deviceId);
+            var device = await _context.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Id == deviceId);
             if (device == null)
-                return NotFound();
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
             if (userRole != "Administrator")
             {
@@ -306,16 +361,22 @@ public class DashboardController : ControllerBase
             }
 
             var sensorLogs = await _context.SensorLogs
+                .AsNoTracking()
                 .Where(sl => sl.DeviceId == deviceId && sl.Timestamp >= cutoffTime)
                 .OrderBy(sl => sl.Timestamp)
                 .ToListAsync();
 
-            return Ok(sensorLogs);
+            return Ok(ApiResponse.Success(sensorLogs, "Device history retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving device history");
-            return StatusCode(500, "Internal server error");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving device history");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return Problem(statusCode: statusCode, title: title, detail: detail);
     }
 }

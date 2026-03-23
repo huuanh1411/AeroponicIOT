@@ -4,6 +4,7 @@ using AeroponicIOT.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AeroponicIOT.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260323025623_AddUniqueConstraintsAndFixDeviceUserFk")]
+    partial class AddUniqueConstraintsAndFixDeviceUserFk
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -133,7 +136,6 @@ namespace AeroponicIOT.Migrations
                         .HasColumnName("condition_parameter");
 
                     b.Property<decimal?>("ConditionValue")
-                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("condition_value");
 
@@ -249,12 +251,10 @@ namespace AeroponicIOT.Migrations
                         .HasColumnName("humidity_min");
 
                     b.Property<decimal?>("PhMax")
-                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("ph_max");
 
                     b.Property<decimal?>("PhMin")
-                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("ph_min");
 
@@ -484,7 +484,6 @@ namespace AeroponicIOT.Migrations
                         .HasColumnName("light_intensity");
 
                     b.Property<decimal?>("Ph")
-                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("ph");
 

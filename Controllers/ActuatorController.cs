@@ -37,7 +37,7 @@ public class ActuatorController : ControllerBase
             if (device == null)
             {
                 _logger.LogWarning("Device with MAC {MacAddress} not found", controlDto.MacAddress);
-                return NotFound($"Device with MAC address {controlDto.MacAddress} not found");
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", $"Device with MAC address {controlDto.MacAddress} not found");
             }
 
             // Ensure requester owns the device or is admin
@@ -56,7 +56,7 @@ public class ActuatorController : ControllerBase
             // Validate action
             if (controlDto.Action.ToUpper() != "ON" && controlDto.Action.ToUpper() != "OFF")
             {
-                return BadRequest("Action must be 'ON' or 'OFF'");
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Action must be 'ON' or 'OFF'");
             }
 
             // Create actuator log
@@ -78,25 +78,22 @@ public class ActuatorController : ControllerBase
             var delivered = await PublishActuatorCommandViamqtt(device, controlDto);
             if (!delivered)
             {
-                return StatusCode(503, new
-                {
-                    message = "Actuator command logged but MQTT delivery failed",
-                    actuatorLogId = actuatorLog.Id,
-                    deliveryMethod = "MQTT"
-                });
+                return ApiProblem(StatusCodes.Status503ServiceUnavailable, "Service Unavailable", "Actuator command logged but MQTT delivery failed");
             }
 
-            return Ok(new
+            var response = new
             {
                 message = $"Actuator {controlDto.ActuatorType} {controlDto.Action} command sent successfully",
                 actuatorLogId = actuatorLog.Id,
                 deliveryMethod = "MQTT"
-            });
+            };
+
+            return Ok(ApiResponse.Success(response, "Actuator command sent"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error controlling actuator");
-            return StatusCode(500, "Internal server error");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error controlling actuator");
         }
     }
 
@@ -109,7 +106,7 @@ public class ActuatorController : ControllerBase
 
             var device = await _context.Devices.FindAsync(deviceId);
             if (device == null)
-                return NotFound();
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -128,13 +125,18 @@ public class ActuatorController : ControllerBase
                 .OrderByDescending(al => al.Timestamp)
                 .ToListAsync();
 
-            return Ok(logs);
+            return Ok(ApiResponse.Success(logs, "Actuator logs retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving actuator logs");
-            return StatusCode(500, "Internal server error");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving actuator logs");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return Problem(statusCode: statusCode, title: title, detail: detail);
     }
 
     /// <summary>

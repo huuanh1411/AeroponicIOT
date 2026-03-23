@@ -25,6 +25,7 @@ public class Device
     [Column("garden_id")]
     public int? GardenId { get; set; }
 
+    [Column("user_id")]
     public int? UserId { get; set; }
 
     [Column("status")]
@@ -66,7 +67,9 @@ public class Device
     public string? Description => $"Status: {Status ?? "Unknown"}";
 
     [NotMapped]
-    public bool IsActive => Status?.ToLower() == "active" || Status?.ToLower() == "online";
+    public bool IsActive => Status is not null &&
+        (Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
+         Status.Equals("online", StringComparison.OrdinalIgnoreCase));
 
     [NotMapped]
     public int? CropId => CurrentCropId;
@@ -75,6 +78,7 @@ public class Device
     [ForeignKey("CurrentCropId")]
     public Crop? Crop { get; set; }
 
+    [ForeignKey(nameof(UserId))]
     public User? User { get; set; }
 
     [ForeignKey("GardenId")]

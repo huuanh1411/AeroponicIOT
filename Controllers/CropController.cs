@@ -32,12 +32,12 @@ public class CropController : ControllerBase
 
             var cropDtos = crops.Select(MapCropListItem).ToList();
 
-            return Ok(cropDtos);
+            return Ok(ApiResponse.Success(cropDtos, "Crops retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting crops");
-            return StatusCode(500, new { detail = "Error retrieving crops" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving crops");
         }
     }
 
@@ -54,7 +54,7 @@ public class CropController : ControllerBase
             if (crop == null)
             {
                 _logger.LogWarning("Crop {CropId} not found", id);
-                return NotFound(new { detail = "Crop not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Crop not found");
             }
 
             var cropDto = new
@@ -83,12 +83,12 @@ public class CropController : ControllerBase
                 DeviceCount = crop.Devices?.Count ?? 0
             };
 
-            return Ok(cropDto);
+            return Ok(ApiResponse.Success(cropDto, "Crop retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting crop {CropId}", id);
-            return StatusCode(500, new { detail = "Error retrieving crop" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving crop");
         }
     }
 
@@ -100,7 +100,7 @@ public class CropController : ControllerBase
             var validationError = ValidateCrop(dto);
             if (validationError != null)
             {
-                return BadRequest(new { detail = validationError });
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", validationError);
             }
 
             var crop = new Crop
@@ -118,12 +118,12 @@ public class CropController : ControllerBase
             _context.Crops.Add(crop);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetCropById), new { id = crop.Id }, MapCropListItem(crop));
+            return CreatedAtAction(nameof(GetCropById), new { id = crop.Id }, ApiResponse.Success(MapCropListItem(crop), "Crop created"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating crop");
-            return StatusCode(500, new { detail = "Error creating crop" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error creating crop");
         }
     }
 
@@ -138,13 +138,13 @@ public class CropController : ControllerBase
 
             if (crop == null)
             {
-                return NotFound(new { detail = "Crop not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Crop not found");
             }
 
             var validationError = ValidateCrop(dto);
             if (validationError != null)
             {
-                return BadRequest(new { detail = validationError });
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", validationError);
             }
 
             crop.Name = dto.Name.Trim();
@@ -159,12 +159,12 @@ public class CropController : ControllerBase
 
             await _context.SaveChangesAsync();
 
-            return Ok(MapCropListItem(crop));
+            return Ok(ApiResponse.Success(MapCropListItem(crop), "Crop updated"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating crop {CropId}", id);
-            return StatusCode(500, new { detail = "Error updating crop" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error updating crop");
         }
     }
 
@@ -180,25 +180,30 @@ public class CropController : ControllerBase
 
             if (crop == null)
             {
-                return NotFound(new { detail = "Crop not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Crop not found");
             }
 
             if (crop.Devices.Any())
             {
-                return BadRequest(new { detail = "Cannot delete a crop that is currently assigned to devices" });
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Cannot delete a crop that is currently assigned to devices");
             }
 
             _context.CropStages.RemoveRange(crop.CropStages);
             _context.Crops.Remove(crop);
             await _context.SaveChangesAsync();
 
-            return Ok(new { detail = "Crop deleted successfully" });
+            return Ok(ApiResponse.Success<object?>(null, "Crop deleted successfully"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting crop {CropId}", id);
-            return StatusCode(500, new { detail = "Error deleting crop" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error deleting crop");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return Problem(statusCode: statusCode, title: title, detail: detail);
     }
 
     private static object MapCropListItem(Crop crop)

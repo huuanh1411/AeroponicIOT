@@ -1,5 +1,8 @@
 using AeroponicIOT.Services.Mqtt;
+using AeroponicIOT.DTOs;
+using AeroponicIOT.Options;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace AeroponicIOT.Controllers;
 
@@ -9,11 +12,13 @@ public class MqttController : ControllerBase
 {
     private readonly IMqttService _mqttService;
     private readonly ILogger<MqttController> _logger;
+    private readonly MqttSettingsOptions _mqttOptions;
 
-    public MqttController(IMqttService mqttService, ILogger<MqttController> logger)
+    public MqttController(IMqttService mqttService, ILogger<MqttController> logger, IOptions<MqttSettingsOptions> mqttOptions)
     {
         _mqttService = mqttService;
         _logger = logger;
+        _mqttOptions = mqttOptions.Value;
     }
 
     /// <summary>
@@ -22,13 +27,15 @@ public class MqttController : ControllerBase
     [HttpGet("status")]
     public IActionResult GetStatus()
     {
-        return Ok(new
+        var status = new
         {
             broker = "MQTT",
             running = _mqttService.IsRunning,
-            port = 1883,
-            host = "localhost"
-        });
+            port = _mqttOptions.Port,
+            host = _mqttOptions.Host
+        };
+
+        return Ok(ApiResponse.Success(status, "MQTT status retrieved"));
     }
 
     /// <summary>
@@ -42,23 +49,23 @@ public class MqttController : ControllerBase
         {
             if (string.IsNullOrWhiteSpace(request.Topic) || string.IsNullOrWhiteSpace(request.Payload))
             {
-                return BadRequest("Topic and Payload are required");
+                return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: "Topic and Payload are required");
             }
 
             var delivered = await _mqttService.PublishAsync(request.Topic, request.Payload, request.Retain);
             if (!delivered)
             {
-                return StatusCode(503, new { message = "MQTT publish failed", topic = request.Topic });
+                return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Service Unavailable", detail: "MQTT publish failed");
             }
             
             _logger.LogInformation("Published message to {Topic}", request.Topic);
             
-            return Ok(new { message = "Message published successfully", topic = request.Topic });
+            return Ok(ApiResponse.Success(new { topic = request.Topic }, "Message published successfully"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error publishing message");
-            return StatusCode(500, new { message = "Internal server error" });
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: "Error publishing message");
         }
     }
 }

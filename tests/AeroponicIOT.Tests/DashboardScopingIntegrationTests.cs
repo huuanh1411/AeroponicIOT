@@ -31,7 +31,7 @@ public class DashboardScopingIntegrationTests : IClassFixture<TestWebApplication
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var activeAlerts = doc.RootElement.GetProperty("activeAlerts");
+        var activeAlerts = doc.RootElement.GetProperty("data").GetProperty("activeAlerts");
 
         Assert.Equal(1, activeAlerts.GetArrayLength());
         Assert.Equal(1, activeAlerts[0].GetProperty("deviceId").GetInt32());
@@ -50,7 +50,7 @@ public class DashboardScopingIntegrationTests : IClassFixture<TestWebApplication
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(1, payload.GetProperty("activeAlerts").GetInt32());
+        Assert.Equal(1, payload.GetProperty("data").GetProperty("activeAlerts").GetInt32());
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class DashboardScopingIntegrationTests : IClassFixture<TestWebApplication
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var activeAlerts = doc.RootElement.GetProperty("activeAlerts");
+        var activeAlerts = doc.RootElement.GetProperty("data").GetProperty("activeAlerts");
 
         Assert.Equal(2, activeAlerts.GetArrayLength());
     }

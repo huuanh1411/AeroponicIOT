@@ -36,7 +36,7 @@ public class AutomationController : ControllerBase
             if (userRole != "Administrator")
             {
                 if (!int.TryParse(userIdClaim, out var userIdInt))
-                    return Unauthorized();
+                    return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
 
                 query = query.Where(r => r.Device != null && r.Device.UserId == userIdInt);
             }
@@ -45,12 +45,12 @@ public class AutomationController : ControllerBase
                 .ThenByDescending(r => r.CreatedAt)
                 .ToListAsync();
 
-            return Ok(rules);
+            return Ok(ApiResponse.Success(rules, "Automation rules retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching automation rules");
-            return StatusCode(500, "Error fetching rules");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error fetching rules");
         }
     }
 
@@ -66,7 +66,7 @@ public class AutomationController : ControllerBase
                 .Include(r => r.Device)
                 .FirstOrDefaultAsync(r => r.Id == id);
             if (rule == null)
-                return NotFound();
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -79,12 +79,12 @@ public class AutomationController : ControllerBase
                 }
             }
 
-            return Ok(rule);
+            return Ok(ApiResponse.Success(rule, "Automation rule retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching rule {RuleId}", id);
-            return StatusCode(500, "Error fetching rule");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error fetching rule");
         }
     }
 
@@ -97,12 +97,12 @@ public class AutomationController : ControllerBase
         try
         {
             if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+                return ValidationProblem(ModelState);
 
             // Validate device exists
             var device = await _context.Devices.FindAsync(request.DeviceId);
             if (device == null)
-                return BadRequest("Device not found");
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Device not found");
 
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -139,12 +139,12 @@ public class AutomationController : ControllerBase
             _logger.LogInformation("Automation rule '{RuleName}' created for device {DeviceId}", 
                 rule.RuleName, rule.DeviceId);
 
-            return CreatedAtAction(nameof(GetRule), new { id = rule.Id }, rule);
+            return CreatedAtAction(nameof(GetRule), new { id = rule.Id }, ApiResponse.Success(rule, "Automation rule created"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating automation rule");
-            return StatusCode(500, "Error creating rule");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error creating rule");
         }
     }
 
@@ -158,7 +158,7 @@ public class AutomationController : ControllerBase
         {
             var rule = await _context.AutomationRules.FindAsync(id);
             if (rule == null)
-                return NotFound();
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var device = await _context.Devices.FindAsync(rule.DeviceId);
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -186,12 +186,12 @@ public class AutomationController : ControllerBase
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Automation rule {RuleId} updated", id);
-            return Ok(rule);
+            return Ok(ApiResponse.Success(rule, "Automation rule updated"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating automation rule {RuleId}", id);
-            return StatusCode(500, "Error updating rule");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error updating rule");
         }
     }
 
@@ -205,7 +205,7 @@ public class AutomationController : ControllerBase
         {
             var rule = await _context.AutomationRules.FindAsync(id);
             if (rule == null)
-                return NotFound();
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var device = await _context.Devices.FindAsync(rule.DeviceId);
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -222,12 +222,12 @@ public class AutomationController : ControllerBase
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Automation rule {RuleId} toggled to {Status}", id, rule.IsActive);
-            return Ok(rule);
+            return Ok(ApiResponse.Success(rule, "Automation rule toggled"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error toggling automation rule {RuleId}", id);
-            return StatusCode(500, "Error toggling rule");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error toggling rule");
         }
     }
 
@@ -241,7 +241,7 @@ public class AutomationController : ControllerBase
         {
             var rule = await _context.AutomationRules.FindAsync(id);
             if (rule == null)
-                return NotFound();
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var device = await _context.Devices.FindAsync(rule.DeviceId);
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -257,12 +257,12 @@ public class AutomationController : ControllerBase
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Automation rule {RuleId} deleted", id);
-            return NoContent();
+            return Ok(ApiResponse.Success<object?>(null, "Automation rule deleted"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting automation rule {RuleId}", id);
-            return StatusCode(500, "Error deleting rule");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error deleting rule");
         }
     }
 
@@ -276,7 +276,7 @@ public class AutomationController : ControllerBase
         {
             var device = await _context.Devices.FindAsync(deviceId);
             if (device == null)
-                return NotFound();
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -292,12 +292,17 @@ public class AutomationController : ControllerBase
                 .OrderByDescending(r => r.Priority)
                 .ToListAsync();
 
-            return Ok(rules);
+            return Ok(ApiResponse.Success(rules, "Automation rules retrieved"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching rules for device {DeviceId}", deviceId);
-            return StatusCode(500, "Error fetching rules");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error fetching rules");
         }
+    }
+
+    private ActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return Problem(statusCode: statusCode, title: title, detail: detail);
     }
 }

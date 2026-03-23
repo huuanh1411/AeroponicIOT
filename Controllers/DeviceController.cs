@@ -3,9 +3,11 @@ using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
 using AeroponicIOT.Options;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Security.Claims;
 
@@ -16,6 +18,11 @@ namespace AeroponicIOT.Controllers;
 [Authorize]
 public class DeviceController : ControllerBase
 {
+    private static readonly TimeSpan FailedAttemptWindow = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan FailedAttemptCooldown = TimeSpan.FromMinutes(2);
+    private const int FailedAttemptThreshold = 5;
+    private static readonly ConcurrentDictionary<string, OnboardingAttemptState> FailedOnboardingAttempts = new();
+
     private readonly ApplicationDbContext _context;
     private readonly ILogger<DeviceController> _logger;
     private readonly ProvisioningOptions _provisioningOptions;
@@ -91,21 +98,22 @@ public class DeviceController : ControllerBase
             }).ToList();
 
             _logger.LogInformation("User {UserId} retrieved {Count} devices", userId, deviceDtos.Count);
-            return Ok(deviceDtos);
+            return Ok(ApiResponse.Success(deviceDtos, "Devices retrieved"));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized while getting devices");
-            return Unauthorized(new { detail = "User not authenticated" });
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting devices");
-            return StatusCode(500, new { detail = "Error retrieving devices" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving devices");
         }
     }
 
     [HttpGet("pending")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GetPendingDevices()
     {
         try
@@ -127,44 +135,53 @@ public class DeviceController : ControllerBase
                 .ToListAsync();
 
             _logger.LogInformation("User {UserId} retrieved {Count} pending devices", userId, pendingDevices.Count);
-            return Ok(pendingDevices);
+            return Ok(ApiResponse.Success(pendingDevices, "Pending devices retrieved"));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized while getting pending devices");
-            return Unauthorized(new { detail = "User not authenticated" });
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving pending devices");
-            return StatusCode(500, new { detail = "Error retrieving pending devices" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving pending devices");
         }
     }
 
     [HttpPost("self-register")]
     [AllowAnonymous]
+    [EnableRateLimiting("device-onboarding")]
     public async Task<IActionResult> SelfRegister([FromBody] DeviceSelfRegisterRequestDto request)
     {
         try
         {
+            var attemptKey = BuildSelfRegisterAttemptKey(request);
+            if (TryGetCooldownResponse(attemptKey, out var cooldownResponse))
+            {
+                return cooldownResponse;
+            }
+
             var providedKey = Request.Headers["X-Device-Key"].FirstOrDefault();
             var configuredKey = _provisioningOptions.SharedKey;
 
             if (string.IsNullOrWhiteSpace(configuredKey))
             {
                 _logger.LogError("Provisioning:SharedKey is not configured");
-                return StatusCode(500, new { detail = "Provisioning key is not configured" });
+                return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Provisioning key is not configured");
             }
 
             if (string.IsNullOrWhiteSpace(providedKey) || !CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(providedKey), System.Text.Encoding.UTF8.GetBytes(configuredKey)))
             {
+                RegisterFailedAttempt(attemptKey);
                 _logger.LogWarning("Invalid provisioning key for self-register request");
-                return Unauthorized(new { detail = "Invalid provisioning key" });
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "Invalid provisioning key");
             }
 
             if (string.IsNullOrWhiteSpace(request.MacAddress) || !IsValidMacAddress(request.MacAddress))
             {
-                return BadRequest(new { detail = "Invalid MAC address format" });
+                RegisterFailedAttempt(attemptKey);
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Invalid MAC address format");
             }
 
             var normalizedMac = request.MacAddress.Trim().ToUpperInvariant();
@@ -210,13 +227,13 @@ public class DeviceController : ControllerBase
                 device.Status = "Active";
                 await _context.SaveChangesAsync();
 
-                return Ok(new DeviceSelfRegisterResponseDto
+                return Ok(ApiResponse.Success(new DeviceSelfRegisterResponseDto
                 {
                     Success = true,
                     DeviceId = device.Id,
                     AlreadyClaimed = true,
                     Message = "Device already claimed"
-                });
+                }, "Device already claimed"));
             }
 
             var claimCode = GenerateClaimCode();
@@ -227,8 +244,9 @@ public class DeviceController : ControllerBase
 
             _context.Devices.Update(device);
             await _context.SaveChangesAsync();
+            ResetFailedAttempts(attemptKey);
 
-            return Ok(new DeviceSelfRegisterResponseDto
+            return Ok(ApiResponse.Success(new DeviceSelfRegisterResponseDto
             {
                 Success = true,
                 DeviceId = device.Id,
@@ -236,25 +254,32 @@ public class DeviceController : ControllerBase
                 ClaimCode = device.ClaimCode,
                 ClaimCodeExpiresAt = device.ClaimCodeExpiresAt,
                 Message = "Device registered and waiting for claim"
-            });
+            }, "Device registered and waiting for claim"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during device self-registration");
-            return StatusCode(500, new { detail = "Error during self-registration" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error during self-registration");
         }
     }
 
     [HttpPost("claim")]
+    [EnableRateLimiting("device-onboarding")]
     public async Task<IActionResult> ClaimDevice([FromBody] ClaimDeviceRequestDto request)
     {
         try
         {
             var userId = GetCurrentUserId();
+            var attemptKey = BuildClaimAttemptKey(request);
+            if (TryGetCooldownResponse(attemptKey, out var cooldownResponse))
+            {
+                return cooldownResponse;
+            }
 
             if (string.IsNullOrWhiteSpace(request.ClaimCode))
             {
-                return BadRequest(new { detail = "Claim code is required" });
+                RegisterFailedAttempt(attemptKey);
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Claim code is required");
             }
 
             var normalizedCode = request.ClaimCode.Trim().ToUpperInvariant();
@@ -263,12 +288,14 @@ public class DeviceController : ControllerBase
 
             if (device == null)
             {
-                return NotFound(new { detail = "Claim code is invalid or device already claimed" });
+                RegisterFailedAttempt(attemptKey);
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Claim code is invalid or device already claimed");
             }
 
             if (!device.ClaimCodeExpiresAt.HasValue || device.ClaimCodeExpiresAt.Value < DateTime.UtcNow)
             {
-                return BadRequest(new { detail = "Claim code has expired. Restart device provisioning to get a new code" });
+                RegisterFailedAttempt(attemptKey);
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Claim code has expired. Restart device provisioning to get a new code");
             }
 
             if (request.CurrentCropId.HasValue)
@@ -276,7 +303,7 @@ public class DeviceController : ControllerBase
                 var crop = await _context.Crops.FindAsync(request.CurrentCropId.Value);
                 if (crop == null)
                 {
-                    return BadRequest(new { detail = "Crop not found" });
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Crop not found");
                 }
                 device.CurrentCropId = request.CurrentCropId;
                 device.CropAssignedAt = DateTime.UtcNow;
@@ -287,7 +314,7 @@ public class DeviceController : ControllerBase
                 var garden = await _context.Gardens.FindAsync(request.GardenId.Value);
                 if (garden == null)
                 {
-                    return BadRequest(new { detail = "Garden not found" });
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Garden not found");
                 }
                 device.GardenId = request.GardenId;
             }
@@ -305,26 +332,27 @@ public class DeviceController : ControllerBase
 
             _context.Devices.Update(device);
             await _context.SaveChangesAsync();
+            ResetFailedAttempts(attemptKey);
 
             _logger.LogInformation("User {UserId} claimed device {DeviceId} ({MacAddress})", userId, device.Id, device.MacAddress);
 
-            return Ok(new
+            return Ok(ApiResponse.Success(new
             {
                 detail = "Device claimed successfully",
                 deviceId = device.Id,
                 macAddress = device.MacAddress,
                 name = device.DeviceName
-            });
+            }, "Device claimed successfully"));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized while claiming device");
-            return Unauthorized(new { detail = "User not authenticated" });
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while claiming device");
-            return StatusCode(500, new { detail = "Error claiming device" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error claiming device");
         }
     }
 
@@ -344,7 +372,7 @@ public class DeviceController : ControllerBase
             if (device == null)
             {
                 _logger.LogWarning("Device {DeviceId} not found", id);
-                return NotFound(new { detail = "Device not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
             }
 
             // Check authorization
@@ -370,17 +398,17 @@ public class DeviceController : ControllerBase
                 LastSeen = device.LastSeen
             };
 
-            return Ok(deviceDto);
+            return Ok(ApiResponse.Success(deviceDto, "Device retrieved"));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized while getting device {DeviceId}", id);
-            return Unauthorized(new { detail = "User not authenticated" });
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting device {DeviceId}", id);
-            return StatusCode(500, new { detail = "Error retrieving device" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving device");
         }
     }
 
@@ -391,7 +419,7 @@ public class DeviceController : ControllerBase
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return ValidationProblem(ModelState);
             }
 
             var userId = GetCurrentUserId();
@@ -399,7 +427,7 @@ public class DeviceController : ControllerBase
             // Validate MAC address format
             if (!IsValidMacAddress(createDto.MacAddress))
             {
-                return BadRequest(new { detail = "Invalid MAC address format. Use AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF" });
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Invalid MAC address format. Use AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF");
             }
 
             // Check if MAC address already exists
@@ -408,7 +436,7 @@ public class DeviceController : ControllerBase
 
             if (existingDevice != null)
             {
-                return BadRequest(new { detail = "Device with this MAC address already exists" });
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Device with this MAC address already exists");
             }
 
             // Validate crop if provided
@@ -417,7 +445,7 @@ public class DeviceController : ControllerBase
                 var crop = await _context.Crops.FindAsync(createDto.CurrentCropId);
                 if (crop == null)
                 {
-                    return BadRequest(new { detail = "Crop not found" });
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Crop not found");
                 }
             }
 
@@ -426,7 +454,7 @@ public class DeviceController : ControllerBase
                 var garden = await _context.Gardens.FindAsync(createDto.GardenId);
                 if (garden == null)
                 {
-                    return BadRequest(new { detail = "Garden not found" });
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Garden not found");
                 }
             }
 
@@ -463,17 +491,17 @@ public class DeviceController : ControllerBase
                 LastSeen = device.LastSeen
             };
 
-            return CreatedAtAction(nameof(GetDeviceById), new { id = device.Id }, deviceDto);
+            return CreatedAtAction(nameof(GetDeviceById), new { id = device.Id }, ApiResponse.Success(deviceDto, "Device created"));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized while creating device");
-            return Unauthorized(new { detail = "User not authenticated" });
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating device");
-            return StatusCode(500, new { detail = "Error creating device" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error creating device");
         }
     }
 
@@ -484,7 +512,7 @@ public class DeviceController : ControllerBase
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return ValidationProblem(ModelState);
             }
 
             var userId = GetCurrentUserId();
@@ -498,7 +526,7 @@ public class DeviceController : ControllerBase
             if (device == null)
             {
                 _logger.LogWarning("Device {DeviceId} not found for update", id);
-                return NotFound(new { detail = "Device not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
             }
 
             // Check authorization
@@ -514,7 +542,7 @@ public class DeviceController : ControllerBase
                 var crop = await _context.Crops.FindAsync(updateDto.CurrentCropId);
                 if (crop == null)
                 {
-                    return BadRequest(new { detail = "Crop not found" });
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Crop not found");
                 }
 
                 if (device.CurrentCropId != updateDto.CurrentCropId)
@@ -534,7 +562,7 @@ public class DeviceController : ControllerBase
                 var garden = await _context.Gardens.FindAsync(updateDto.GardenId);
                 if (garden == null)
                 {
-                    return BadRequest(new { detail = "Garden not found" });
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Garden not found");
                 }
                 device.GardenId = updateDto.GardenId;
             }
@@ -567,17 +595,17 @@ public class DeviceController : ControllerBase
                 LastSeen = device.LastSeen
             };
 
-            return Ok(deviceDto);
+            return Ok(ApiResponse.Success(deviceDto, "Device updated"));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized while updating device {DeviceId}", id);
-            return Unauthorized(new { detail = "User not authenticated" });
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating device {DeviceId}", id);
-            return StatusCode(500, new { detail = "Error updating device" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error updating device");
         }
     }
 
@@ -595,7 +623,7 @@ public class DeviceController : ControllerBase
             if (device == null)
             {
                 _logger.LogWarning("Device {DeviceId} not found for deletion", id);
-                return NotFound(new { detail = "Device not found" });
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
             }
 
             // Check authorization
@@ -620,19 +648,111 @@ public class DeviceController : ControllerBase
 
             _logger.LogInformation("User {UserId} deleted device {DeviceId}", userId, id);
 
-            return Ok(new { detail = "Device deleted successfully" });
+            return Ok(ApiResponse.Success<object?>(null, "Device deleted successfully"));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "Unauthorized while deleting device {DeviceId}", id);
-            return Unauthorized(new { detail = "User not authenticated" });
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting device {DeviceId}", id);
-            return StatusCode(500, new { detail = "Error deleting device" });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error deleting device");
         }
     }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return Problem(statusCode: statusCode, title: title, detail: detail);
+    }
+
+    private string BuildSelfRegisterAttemptKey(DeviceSelfRegisterRequestDto request)
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var mac = request.MacAddress?.Trim().ToUpperInvariant() ?? "unknown";
+        return $"self-register:{ip}:{mac}";
+    }
+
+    private string BuildClaimAttemptKey(ClaimDeviceRequestDto request)
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var code = request.ClaimCode?.Trim().ToUpperInvariant() ?? "unknown";
+        return $"claim:{ip}:{code}";
+    }
+
+    private bool TryGetCooldownResponse(string attemptKey, out IActionResult response)
+    {
+        response = default!;
+        if (!TryGetCooldownRemainingSeconds(attemptKey, out var retryAfterSeconds))
+        {
+            return false;
+        }
+
+        Response.Headers["Retry-After"] = retryAfterSeconds.ToString();
+        response = ApiProblem(StatusCodes.Status429TooManyRequests, "Too Many Requests", "Too many invalid onboarding attempts. Please retry later.");
+        return true;
+    }
+
+    private static bool TryGetCooldownRemainingSeconds(string attemptKey, out int retryAfterSeconds)
+    {
+        retryAfterSeconds = 0;
+        if (!FailedOnboardingAttempts.TryGetValue(attemptKey, out var state))
+        {
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (state.BlockedUntilUtc.HasValue && state.BlockedUntilUtc.Value > now)
+        {
+            retryAfterSeconds = (int)Math.Ceiling((state.BlockedUntilUtc.Value - now).TotalSeconds);
+            return true;
+        }
+
+        if (state.BlockedUntilUtc.HasValue && state.BlockedUntilUtc.Value <= now)
+        {
+            FailedOnboardingAttempts.TryRemove(attemptKey, out _);
+        }
+
+        return false;
+    }
+
+    private static void RegisterFailedAttempt(string attemptKey)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        FailedOnboardingAttempts.AddOrUpdate(
+            attemptKey,
+            _ => new OnboardingAttemptState(1, now, null),
+            (_, current) =>
+            {
+                if (current.BlockedUntilUtc.HasValue && current.BlockedUntilUtc.Value > now)
+                {
+                    return current;
+                }
+
+                var windowStart = current.WindowStartUtc;
+                var count = current.Count;
+
+                if (now - windowStart > FailedAttemptWindow)
+                {
+                    windowStart = now;
+                    count = 0;
+                }
+
+                count++;
+                DateTimeOffset? blockedUntil = count >= FailedAttemptThreshold ? now.Add(FailedAttemptCooldown) : null;
+
+                return new OnboardingAttemptState(count, windowStart, blockedUntil);
+            });
+    }
+
+    private static void ResetFailedAttempts(string attemptKey)
+    {
+        FailedOnboardingAttempts.TryRemove(attemptKey, out _);
+    }
+
+    private sealed record OnboardingAttemptState(int Count, DateTimeOffset WindowStartUtc, DateTimeOffset? BlockedUntilUtc);
 
     // Helper method to validate MAC address format
     private bool IsValidMacAddress(string macAddress)
