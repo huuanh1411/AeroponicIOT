@@ -195,7 +195,7 @@ public class DeviceController : ControllerBase
                     MacAddress = normalizedMac,
                     ChipId = string.IsNullOrWhiteSpace(request.ChipId) ? null : request.ChipId.Trim(),
                     FirmwareVersion = string.IsNullOrWhiteSpace(request.FirmwareVersion) ? null : request.FirmwareVersion.Trim(),
-                    Status = "Pending",
+                    Status = DeviceStatusValues.Pending,
                     CreatedAt = DateTime.UtcNow,
                     LastSeen = DateTime.UtcNow,
                     ProvisionedAt = DateTime.UtcNow
@@ -224,7 +224,7 @@ public class DeviceController : ControllerBase
 
             if (device.UserId != null)
             {
-                device.Status = "Active";
+                device.Status = DeviceStatusValues.Active;
                 await _context.SaveChangesAsync();
 
                 return Ok(ApiResponse.Success(new DeviceSelfRegisterResponseDto
@@ -240,7 +240,7 @@ public class DeviceController : ControllerBase
             var claimCodeMinutes = _provisioningOptions.ClaimCodeMinutes;
             device.ClaimCode = claimCode;
             device.ClaimCodeExpiresAt = DateTime.UtcNow.AddMinutes(claimCodeMinutes);
-            device.Status = "Pending";
+            device.Status = DeviceStatusValues.Pending;
 
             _context.Devices.Update(device);
             await _context.SaveChangesAsync();
@@ -325,7 +325,7 @@ public class DeviceController : ControllerBase
             }
 
             device.UserId = userId;
-            device.Status = "Active";
+            device.Status = DeviceStatusValues.Active;
             device.ClaimCode = null;
             device.ClaimCodeExpiresAt = null;
             device.LastSeen = DateTime.UtcNow;
@@ -417,18 +417,7 @@ public class DeviceController : ControllerBase
     {
         try
         {
-            if (!ModelState.IsValid)
-            {
-                return ValidationProblem(ModelState);
-            }
-
             var userId = GetCurrentUserId();
-
-            // Validate MAC address format
-            if (!IsValidMacAddress(createDto.MacAddress))
-            {
-                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Invalid MAC address format. Use AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF");
-            }
 
             // Check if MAC address already exists
             var existingDevice = await _context.Devices
@@ -466,7 +455,7 @@ public class DeviceController : ControllerBase
                 CropAssignedAt = createDto.CurrentCropId.HasValue ? DateTime.UtcNow : null,
                 GardenId = createDto.GardenId,
                 UserId = userId,
-                Status = "Active",
+                Status = DeviceStatusValues.Active,
                 CreatedAt = DateTime.UtcNow,
                 LastSeen = DateTime.UtcNow
             };
@@ -510,11 +499,6 @@ public class DeviceController : ControllerBase
     {
         try
         {
-            if (!ModelState.IsValid)
-            {
-                return ValidationProblem(ModelState);
-            }
-
             var userId = GetCurrentUserId();
             var userRole = GetCurrentUserRole();
 
@@ -572,7 +556,16 @@ public class DeviceController : ControllerBase
             }
 
             device.DeviceName = updateDto.Name ?? device.DeviceName;
-            device.Status = updateDto.Status ?? device.Status;
+            if (!string.IsNullOrWhiteSpace(updateDto.Status))
+            {
+                if (!DeviceStatusValues.TryNormalize(updateDto.Status, out var normalizedStatus))
+                {
+                    var allowedStatuses = string.Join(", ", DeviceStatusValues.All);
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", $"Invalid status. Allowed values: {allowedStatuses}");
+                }
+
+                device.Status = normalizedStatus;
+            }
 
             _context.Devices.Update(device);
             await _context.SaveChangesAsync();
@@ -664,7 +657,7 @@ public class DeviceController : ControllerBase
 
     private IActionResult ApiProblem(int statusCode, string title, string detail)
     {
-        return Problem(statusCode: statusCode, title: title, detail: detail);
+        return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }
 
     private string BuildSelfRegisterAttemptKey(DeviceSelfRegisterRequestDto request)

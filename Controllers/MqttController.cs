@@ -3,6 +3,7 @@ using AeroponicIOT.DTOs;
 using AeroponicIOT.Options;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using System.ComponentModel.DataAnnotations;
 
 namespace AeroponicIOT.Controllers;
 
@@ -47,15 +48,10 @@ public class MqttController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(request.Topic) || string.IsNullOrWhiteSpace(request.Payload))
-            {
-                return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: "Topic and Payload are required");
-            }
-
-            var delivered = await _mqttService.PublishAsync(request.Topic, request.Payload, request.Retain);
+            var delivered = await _mqttService.PublishAsync(request.Topic!, request.Payload!, request.Retain);
             if (!delivered)
             {
-                return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Service Unavailable", detail: "MQTT publish failed");
+                return ApiProblem(StatusCodes.Status503ServiceUnavailable, "Service Unavailable", "MQTT publish failed");
             }
             
             _logger.LogInformation("Published message to {Topic}", request.Topic);
@@ -65,14 +61,27 @@ public class MqttController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error publishing message");
-            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: "Error publishing message");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error publishing message");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }
 }
 
 public class PublishRequest
 {
+    [Required]
+    [StringLength(256)]
+    [RegularExpression(@".*\S.*", ErrorMessage = "Topic is required")]
     public string? Topic { get; set; }
+
+    [Required]
+    [StringLength(4096)]
+    [RegularExpression(@".*\S.*", ErrorMessage = "Payload is required")]
     public string? Payload { get; set; }
+
     public bool Retain { get; set; } = false;
 }

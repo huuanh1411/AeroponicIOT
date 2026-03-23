@@ -42,26 +42,13 @@ public class AuthenticationController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-            {
-                return BadRequest(new TokenResponse
-                {
-                    Success = false,
-                    Message = "Username and password are required"
-                });
-            }
-
             // Check if user already exists
             var existingUser = await _context.Users
                 .FirstOrDefaultAsync(u => u.Username == request.Username);
 
             if (existingUser != null)
             {
-                return BadRequest(new TokenResponse
-                {
-                    Success = false,
-                    Message = "Username already exists"
-                });
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Username already exists", "username_exists");
             }
 
             // Determine role server-side. Only an authenticated Administrator may assign roles.
@@ -70,11 +57,7 @@ public class AuthenticationController : ControllerBase
             {
                 if (!TryNormalizeRole(request.Role, out var normalizedRole))
                 {
-                    return BadRequest(new TokenResponse
-                    {
-                        Success = false,
-                        Message = "Invalid role. Allowed roles: Farmer, Administrator"
-                    });
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Invalid role. Allowed roles: Farmer, Administrator", "invalid_role");
                 }
 
                 roleToAssign = normalizedRole;
@@ -117,11 +100,7 @@ public class AuthenticationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error registering user");
-            return StatusCode(500, new TokenResponse
-            {
-                Success = false,
-                Message = "Internal server error"
-            });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Internal server error");
         }
     }
 
@@ -134,15 +113,6 @@ public class AuthenticationController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-            {
-                return BadRequest(new TokenResponse
-                {
-                    Success = false,
-                    Message = "Username and password are required"
-                });
-            }
-
             // Find user by username
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.Username == request.Username);
@@ -150,11 +120,7 @@ public class AuthenticationController : ControllerBase
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             {
                 _logger.LogWarning("Login failed for username {Username}", request.Username);
-                return Unauthorized(new TokenResponse
-                {
-                    Success = false,
-                    Message = "Invalid username or password"
-                });
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "Invalid username or password", "invalid_credentials");
             }
 
             // Update last login
@@ -194,11 +160,7 @@ public class AuthenticationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during login");
-            return StatusCode(500, new TokenResponse
-            {
-                Success = false,
-                Message = "Internal server error"
-            });
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Internal server error");
         }
     }
 
@@ -214,13 +176,13 @@ public class AuthenticationController : ControllerBase
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "User not authenticated");
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
             {
-                return Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: "User not found");
+                return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "User not found");
             }
 
             var userInfo = new UserInfoDto
@@ -243,8 +205,13 @@ public class AuthenticationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving current user");
-            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: "Error retrieving current user");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving current user");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail, string? errorCode = null)
+    {
+        return ProblemResponseFactory.Create(this, statusCode, title, detail, errorCode);
     }
 
     private static bool TryNormalizeRole(string? role, out string normalizedRole)

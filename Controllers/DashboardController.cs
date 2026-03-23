@@ -54,7 +54,10 @@ public class DashboardController : ControllerBase
 
             var totalDevices = await devicesQuery.CountAsync();
             var activeDevicesCount = await devicesQuery.CountAsync(d =>
-                d.Status != null && (d.Status.ToLower() == "active" || d.Status.ToLower() == "online"));
+                d.Status == DeviceStatusValues.Active ||
+                d.Status == DeviceStatusValues.Online ||
+                d.Status == "active" ||
+                d.Status == "online");
 
             var pagedDevices = await devicesQuery
                 .OrderBy(d => d.Id)
@@ -67,7 +70,10 @@ public class DashboardController : ControllerBase
                     MacAddress = d.MacAddress,
                     GardenId = d.GardenId,
                     GardenName = d.Garden != null ? d.Garden.Name : null,
-                    IsActive = d.Status != null && (d.Status.ToLower() == "active" || d.Status.ToLower() == "online"),
+                    IsActive = d.Status == DeviceStatusValues.Active ||
+                               d.Status == DeviceStatusValues.Online ||
+                               d.Status == "active" ||
+                               d.Status == "online",
                     LastSeen = d.LastSeen,
                     CropName = d.Crop != null ? d.Crop.Name : null,
                     LatestSensorData = _context.SensorLogs
@@ -201,10 +207,7 @@ public class DashboardController : ControllerBase
                 .Average();
 
             // Calculate system health percentage
-            var activeDevices = devices.Count(d =>
-                d.Status != null &&
-                (d.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
-                 d.Status.Equals("online", StringComparison.OrdinalIgnoreCase)));
+            var activeDevices = devices.Count(d => DeviceStatusValues.IsActive(d.Status));
             var totalDevices = devices.Count;
             var deviceHealth = totalDevices > 0 ? (activeDevices * 100.0) / totalDevices : 0;
 
@@ -377,6 +380,6 @@ public class DashboardController : ControllerBase
 
     private IActionResult ApiProblem(int statusCode, string title, string detail)
     {
-        return Problem(statusCode: statusCode, title: title, detail: detail);
+        return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }
 }

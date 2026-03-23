@@ -36,10 +36,7 @@ public class SensorController : ControllerBase
         {
             if (!(User?.Identity?.IsAuthenticated ?? false) && !HasValidDeviceKey())
             {
-                return Problem(
-                    statusCode: StatusCodes.Status401Unauthorized,
-                    title: "Unauthorized",
-                    detail: "Missing or invalid device key");
+                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "Missing or invalid device key");
             }
 
             await _sensorIngestionService.ProcessSensorDataAsync(sensorData, HttpContext.RequestAborted);
@@ -49,11 +46,13 @@ public class SensorController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing sensor data");
-            return Problem(
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Internal Server Error",
-                detail: "Error processing sensor data");
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error processing sensor data");
         }
+    }
+
+    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    {
+        return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }
 
     private bool HasValidDeviceKey()

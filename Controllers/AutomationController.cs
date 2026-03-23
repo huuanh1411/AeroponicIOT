@@ -303,6 +303,6 @@ public class AutomationController : ControllerBase
 
     private ActionResult ApiProblem(int statusCode, string title, string detail)
     {
-        return Problem(statusCode: statusCode, title: title, detail: detail);
+        return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }
 }

@@ -9,10 +9,12 @@ public class LoginRequest
 {
     [Required]
     [StringLength(100, MinimumLength = 3)]
+    [RegularExpression(@".*\S.*", ErrorMessage = "Username cannot be empty or whitespace")]
     public string? Username { get; set; }
 
     [Required]
     [StringLength(128, MinimumLength = 8)]
+    [RegularExpression(@".*\S.*", ErrorMessage = "Password cannot be empty or whitespace")]
     public string? Password { get; set; }
 }
 
@@ -23,6 +25,7 @@ public class RegisterRequest
 {
     [Required]
     [StringLength(100, MinimumLength = 3)]
+    [RegularExpression(@".*\S.*", ErrorMessage = "Username cannot be empty or whitespace")]
     public string? Username { get; set; }
 
     [Required]

@@ -47,6 +47,7 @@ public class UpdateDeviceDto
     public int? GardenId { get; set; }
 
     [StringLength(20)]
+    [RegularExpression("(?i)^(pending|active|online|offline|inactive)$", ErrorMessage = "Status must be one of: Pending, Active, Online, Offline, Inactive")]
     public string? Status { get; set; }
 }
 

@@ -67,9 +67,7 @@ public class Device
     public string? Description => $"Status: {Status ?? "Unknown"}";
 
     [NotMapped]
-    public bool IsActive => Status is not null &&
-        (Status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
-         Status.Equals("online", StringComparison.OrdinalIgnoreCase));
+    public bool IsActive => DeviceStatusValues.IsActive(Status);
 
     [NotMapped]
     public int? CropId => CurrentCropId;

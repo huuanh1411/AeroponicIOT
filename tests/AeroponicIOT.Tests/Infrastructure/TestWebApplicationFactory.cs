@@ -27,6 +27,12 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 ["JwtSettings:Issuer"] = "AeroponicIOT-Test",
                 ["JwtSettings:Audience"] = "AeroponicIOT-Test",
                 ["JwtSettings:ExpirationMinutes"] = "60",
+                ["MqttSettings:Host"] = "test-broker.local",
+                ["MqttSettings:Port"] = "28883",
+                ["RateLimiting:Auth:PermitLimit"] = "200",
+                ["RateLimiting:Auth:WindowSeconds"] = "60",
+                ["RateLimiting:DeviceOnboarding:PermitLimit"] = "500",
+                ["RateLimiting:DeviceOnboarding:WindowSeconds"] = "60",
                 ["Provisioning:SharedKey"] = "test-shared-key-123",
                 ["Provisioning:ClaimCodeMinutes"] = "10",
                 ["ConnectionStrings:DefaultConnection"] = "Server=(localdb)\\mssqllocaldb;Database=AeroponicIOT_Test;Trusted_Connection=True;MultipleActiveResultSets=true"

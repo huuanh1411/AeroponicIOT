@@ -110,11 +110,16 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddRateLimiter(options =>
 {
+    var authPermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:Auth:PermitLimit") ?? 10;
+    var authWindowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:Auth:WindowSeconds") ?? 60;
+    var devicePermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:DeviceOnboarding:PermitLimit") ?? 20;
+    var deviceWindowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:DeviceOnboarding:WindowSeconds") ?? 60;
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddFixedWindowLimiter("auth", limiterOptions =>
     {
-        limiterOptions.PermitLimit = 10;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.PermitLimit = authPermitLimit;
+        limiterOptions.Window = TimeSpan.FromSeconds(authWindowSeconds);
         limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         limiterOptions.QueueLimit = 0;
     });
@@ -125,8 +130,8 @@ builder.Services.AddRateLimiter(options =>
 
         return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 20,
-            Window = TimeSpan.FromMinutes(1),
+            PermitLimit = devicePermitLimit,
+            Window = TimeSpan.FromSeconds(deviceWindowSeconds),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             QueueLimit = 0,
             AutoReplenishment = true
