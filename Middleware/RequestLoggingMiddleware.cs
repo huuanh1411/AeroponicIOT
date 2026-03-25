@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace AeroponicIOT.Middleware;
 
-public class RequestLoggingMiddleware
+public partial class RequestLoggingMiddleware
 {
     private const string CorrelationHeaderName = "X-Correlation-ID";
     private static readonly string[] ExcludedPathPrefixes =
@@ -16,6 +16,20 @@ public class RequestLoggingMiddleware
 
     private readonly RequestDelegate _next;
     private readonly ILogger<RequestLoggingMiddleware> _logger;
+
+    [LoggerMessage(
+        EventId = 1,
+        Message = "HTTP {Method} {Path} responded {StatusCode} in {ElapsedMs} ms. CorrelationId={CorrelationId}, User={User}, RemoteIp={RemoteIp}")]
+    private static partial void LogHttpRequest(
+        ILogger logger,
+        LogLevel logLevel,
+        string method,
+        string path,
+        int statusCode,
+        double elapsedMs,
+        string correlationId,
+        string user,
+        string remoteIp);
 
     public RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
     {
@@ -39,23 +53,29 @@ public class RequestLoggingMiddleware
         }
         finally
         {
-            var elapsedMs = Math.Round(Stopwatch.GetElapsedTime(started).TotalMilliseconds, 2);
-            var correlationId = context.Response.Headers[CorrelationHeaderName].FirstOrDefault()
-                ?? context.Request.Headers[CorrelationHeaderName].FirstOrDefault()
-                ?? context.TraceIdentifier;
-
             var statusCode = context.Response.StatusCode;
             var logLevel = statusCode >= 500 ? LogLevel.Error : LogLevel.Information;
 
-            _logger.Log(logLevel,
-                "HTTP {Method} {Path} responded {StatusCode} in {ElapsedMs} ms. CorrelationId={CorrelationId}, User={User}, RemoteIp={RemoteIp}",
-                context.Request.Method,
-                path,
-                statusCode,
-                elapsedMs,
-                correlationId,
-                context.User.Identity?.Name ?? "anonymous",
-                context.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+            if (_logger.IsEnabled(logLevel))
+            {
+                var elapsedMs = Math.Round(Stopwatch.GetElapsedTime(started).TotalMilliseconds, 2);
+                var correlationId = context.Response.Headers[CorrelationHeaderName].FirstOrDefault()
+                    ?? context.Request.Headers[CorrelationHeaderName].FirstOrDefault()
+                    ?? context.TraceIdentifier;
+                var remoteIp = context.Connection.RemoteIpAddress is { } remoteIpAddress
+                    ? remoteIpAddress.ToString()
+                    : "unknown";
+
+                LogHttpRequest(_logger,
+                    logLevel,
+                    context.Request.Method,
+                    path,
+                    statusCode,
+                    elapsedMs,
+                    correlationId,
+                    context.User.Identity?.Name ?? "anonymous",
+                    remoteIp);
+            }
         }
     }
 
