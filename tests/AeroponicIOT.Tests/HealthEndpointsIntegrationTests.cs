@@ -65,4 +65,37 @@ public class HealthEndpointsIntegrationTests : IClassFixture<TestWebApplicationF
             c.TryGetProperty("name", out var name) &&
             string.Equals(name.GetString(), "mqtt", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public async Task HealthAlias_MatchesHealthReadyContract()
+    {
+        using var client = _factory.CreateClient();
+
+        var readyResponse = await client.GetAsync("/health/ready");
+        var aliasResponse = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, aliasResponse.StatusCode);
+
+        var readyPayload = await readyResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var aliasPayload = await aliasResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(
+            readyPayload.GetProperty("status").GetString(),
+            aliasPayload.GetProperty("status").GetString());
+
+        var readyCheckNames = readyPayload.GetProperty("checks")
+            .EnumerateArray()
+            .Select(c => c.GetProperty("name").GetString() ?? string.Empty)
+            .OrderBy(n => n)
+            .ToArray();
+
+        var aliasCheckNames = aliasPayload.GetProperty("checks")
+            .EnumerateArray()
+            .Select(c => c.GetProperty("name").GetString() ?? string.Empty)
+            .OrderBy(n => n)
+            .ToArray();
+
+        Assert.Equal(readyCheckNames, aliasCheckNames);
+    }
 }
