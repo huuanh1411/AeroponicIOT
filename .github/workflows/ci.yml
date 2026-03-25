@@ -24,5 +24,11 @@ jobs:
       - name: Build
         run: dotnet build AeroponicIOT.sln --configuration Release --no-restore
 
+      - name: Verify Formatting
+        run: dotnet format style AeroponicIOT.sln --verify-no-changes --severity error --no-restore
+
       - name: Test
         run: dotnet test AeroponicIOT.sln --configuration Release --no-build --verbosity normal
+
+      - name: Security Audit (NuGet)
+        run: dotnet list AeroponicIOT.sln package --vulnerable --include-transitive

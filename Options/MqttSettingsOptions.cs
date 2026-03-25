@@ -14,4 +14,29 @@ public class MqttSettingsOptions
     public string? Username { get; set; }
 
     public string? Password { get; set; }
+
+    public bool RequireClientAuthentication { get; set; } = true;
+
+    public bool EnableTls { get; set; }
+
+    [Range(1, 65535)]
+    public int TlsPort { get; set; } = 8883;
+
+    public bool DisablePlaintextEndpoint { get; set; }
+
+    public string? ServerCertificatePath { get; set; }
+
+    public string? ServerCertificatePassword { get; set; }
+
+    public bool RequireClientCertificate { get; set; }
+
+    public string[] AllowedClientCertificateIssuers { get; set; } = Array.Empty<string>();
+
+    public string[] AllowedClientCertificateThumbprints { get; set; } = Array.Empty<string>();
+
+    public bool EnforceTopicAcl { get; set; } = true;
+
+    [Required]
+    [MinLength(1)]
+    public string DeviceTopicPrefix { get; set; } = "devices";
 }

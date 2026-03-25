@@ -33,7 +33,13 @@ public class MqttController : ControllerBase
             broker = "MQTT",
             running = _mqttService.IsRunning,
             port = _mqttOptions.Port,
-            host = _mqttOptions.Host
+            host = _mqttOptions.Host,
+            tlsEnabled = _mqttOptions.EnableTls,
+            tlsPort = _mqttOptions.EnableTls ? _mqttOptions.TlsPort : (int?)null,
+            plaintextEndpointEnabled = !_mqttOptions.DisablePlaintextEndpoint,
+            clientCertificateRequired = _mqttOptions.EnableTls && _mqttOptions.RequireClientCertificate,
+            clientCertificateIssuerAllowlistCount = _mqttOptions.AllowedClientCertificateIssuers.Length,
+            clientCertificateThumbprintAllowlistCount = _mqttOptions.AllowedClientCertificateThumbprints.Length
         };
 
         return Ok(ApiResponse.Success(status, "MQTT status retrieved"));

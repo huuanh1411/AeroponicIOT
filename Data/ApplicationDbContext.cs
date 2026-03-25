@@ -10,16 +10,16 @@ public class ApplicationDbContext : DbContext
     {
     }
 
-    public DbSet<Device> Devices { get; set; }
-    public DbSet<Crop> Crops { get; set; }
-    public DbSet<CropStage> CropStages { get; set; }
-    public DbSet<SensorLog> SensorLogs { get; set; }
-    public DbSet<ActuatorLog> ActuatorLogs { get; set; }
-    public DbSet<User> Users { get; set; }
-    public DbSet<Alert> Alerts { get; set; }
-    public DbSet<Notification> Notifications { get; set; }
-    public DbSet<AutomationRule> AutomationRules { get; set; }
-    public DbSet<Garden> Gardens { get; set; }
+    public DbSet<Device> Devices { get; set; } = null!;
+    public DbSet<Crop> Crops { get; set; } = null!;
+    public DbSet<CropStage> CropStages { get; set; } = null!;
+    public DbSet<SensorLog> SensorLogs { get; set; } = null!;
+    public DbSet<ActuatorLog> ActuatorLogs { get; set; } = null!;
+    public DbSet<User> Users { get; set; } = null!;
+    public DbSet<Alert> Alerts { get; set; } = null!;
+    public DbSet<Notification> Notifications { get; set; } = null!;
+    public DbSet<AutomationRule> AutomationRules { get; set; } = null!;
+    public DbSet<Garden> Gardens { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -110,6 +110,22 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<SensorLog>()
             .Property(s => s.Ph)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<SensorLog>()
+            .Property(s => s.TdsRaw)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<SensorLog>()
+            .Property(s => s.WaterTempRaw)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<SensorLog>()
+            .Property(s => s.HumidityRaw)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<SensorLog>()
+            .Property(s => s.LightIntensityRaw)
             .HasPrecision(18, 2);
 
         // Note: Removed seed data since we're connecting to existing database

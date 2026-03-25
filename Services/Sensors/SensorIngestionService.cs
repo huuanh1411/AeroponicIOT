@@ -57,10 +57,14 @@ public class SensorIngestionService : ISensorIngestionService
         {
             DeviceId = device.Id,
             Ph = sensorData.Ph != null ? (decimal?)sensorData.Ph : null,
-            TdsPpm = sensorData.Tds != null ? (int?)sensorData.Tds : null,
-            WaterTemp = sensorData.WaterTemperature != null ? (int?)sensorData.WaterTemperature : null,
-            Humidity = sensorData.AirHumidity != null ? (int?)sensorData.AirHumidity : null,
-            LightIntensity = sensorData.LightIntensity != null ? (int?)sensorData.LightIntensity : null,
+            TdsRaw = sensorData.Tds != null ? (decimal?)sensorData.Tds : null,
+            TdsPpm = sensorData.Tds != null ? (int?)Math.Round(sensorData.Tds.Value, MidpointRounding.AwayFromZero) : null,
+            WaterTempRaw = sensorData.WaterTemperature != null ? (decimal?)sensorData.WaterTemperature : null,
+            WaterTemp = sensorData.WaterTemperature != null ? (int?)Math.Round(sensorData.WaterTemperature.Value, MidpointRounding.AwayFromZero) : null,
+            HumidityRaw = sensorData.AirHumidity != null ? (decimal?)sensorData.AirHumidity : null,
+            Humidity = sensorData.AirHumidity != null ? (int?)Math.Round(sensorData.AirHumidity.Value, MidpointRounding.AwayFromZero) : null,
+            LightIntensityRaw = sensorData.LightIntensity != null ? (decimal?)sensorData.LightIntensity : null,
+            LightIntensity = sensorData.LightIntensity != null ? (int?)Math.Round(sensorData.LightIntensity.Value, MidpointRounding.AwayFromZero) : null,
             Timestamp = DateTime.UtcNow
         };
 

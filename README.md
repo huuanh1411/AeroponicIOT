@@ -177,8 +177,58 @@ The system includes a built-in MQTT broker for real-time IoT device communicatio
 
 ### MQTT Broker Details
 - **Default Port**: 1883
+- **Default TLS Port**: 8883 (when enabled)
 - **Default Host**: localhost
 - **Status Endpoint**: `GET /api/mqtt/status`
+
+### MQTT Security Hardening
+
+MQTT production hardening supports device/admin credentials, topic ACLs, and optional TLS/mTLS.
+
+Configuration keys:
+
+- `MqttSettings:RequireClientAuthentication` (default `true`)
+- `MqttSettings:EnforceTopicAcl` (default `true`)
+- `MqttSettings:EnableTls` (default `false`)
+- `MqttSettings:TlsPort` (default `8883`)
+- `MqttSettings:DisablePlaintextEndpoint` (default `false`)
+- `MqttSettings:ServerCertificatePath`
+- `MqttSettings:ServerCertificatePassword`
+- `MqttSettings:RequireClientCertificate` (default `false`)
+- `MqttSettings:AllowedClientCertificateIssuers` (required for strict mTLS unless thumbprints are provided)
+- `MqttSettings:AllowedClientCertificateThumbprints` (required for strict mTLS unless issuers are provided)
+
+Example environment variables:
+
+```bash
+MQTT_ENABLE_TLS=true \
+MQTT_TLS_PORT=8883 \
+MQTT_DISABLE_PLAINTEXT=true \
+MQTT_SERVER_CERT_PATH=/certs/mqtt-server.pfx \
+MQTT_SERVER_CERT_PASSWORD=change-me \
+MQTT_ALLOWED_CLIENT_CERT_ISSUER_0="CN=Aeroponic Device CA, O=Aeroponic" \
+MQTT_ALLOWED_CLIENT_CERT_THUMBPRINT_0="ABCD1234EF567890ABCD1234EF567890ABCD1234" \
+MQTT_REQUIRE_CLIENT_CERT=false
+```
+
+When `MqttSettings:EnableTls=true`, `MqttSettings:ServerCertificatePath` is required.
+When `MqttSettings:RequireClientCertificate=true`, you must configure at least one allowlist source:
+
+- `MqttSettings:AllowedClientCertificateIssuers`
+- `MqttSettings:AllowedClientCertificateThumbprints`
+
+Certificate rollout guidance:
+
+1. Provision each device with a client certificate issued by your private CA.
+2. Pin either trusted issuer DNs or approved certificate thumbprints in MQTT settings.
+3. Enable `MqttSettings:RequireClientCertificate=true` and verify only allowlisted certs can connect.
+
+## Structured Request Logging
+
+HTTP requests are logged with method, path, status code, duration, correlation ID, user identity, and remote IP.
+
+- Correlation IDs are propagated through `X-Correlation-ID`.
+- Health/static paths are skipped to reduce operational noise.
 
 ### Device Communication Topics
 

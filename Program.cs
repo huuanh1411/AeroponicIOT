@@ -37,6 +37,12 @@ builder.Services.AddOptions<JwtSettingsOptions>()
 builder.Services.AddOptions<MqttSettingsOptions>()
     .Bind(builder.Configuration.GetSection("MqttSettings"))
     .ValidateDataAnnotations()
+    .Validate(o => !o.EnableTls || !string.IsNullOrWhiteSpace(o.ServerCertificatePath), "MqttSettings:ServerCertificatePath is required when TLS is enabled")
+    .Validate(o => !o.RequireClientCertificate || o.EnableTls, "MqttSettings:EnableTls must be true when RequireClientCertificate is enabled")
+    .Validate(
+        o => !o.RequireClientCertificate ||
+             (o.AllowedClientCertificateIssuers.Length > 0 || o.AllowedClientCertificateThumbprints.Length > 0),
+        "MqttSettings:AllowedClientCertificateIssuers or MqttSettings:AllowedClientCertificateThumbprints must be configured when client certificates are required")
     .ValidateOnStart();
 
 builder.Services.AddOptions<ProvisioningOptions>()
@@ -261,6 +267,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders();
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 if (!app.Environment.IsEnvironment("Testing"))
 {

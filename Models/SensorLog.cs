@@ -22,28 +22,40 @@ public class SensorLog
     [Column("tds_ppm")]
     public int? TdsPpm { get; set; }
 
+    [Column("tds_raw")]
+    public decimal? TdsRaw { get; set; }
+
     [Column("water_temp")]
     public int? WaterTemp { get; set; }
 
+    [Column("water_temp_raw")]
+    public decimal? WaterTempRaw { get; set; }
+
     [Column("humidity")]
     public int? Humidity { get; set; }
+
+    [Column("humidity_raw")]
+    public decimal? HumidityRaw { get; set; }
 
     // Optional light intensity (e.g., lux) for EC / light monitoring features.
     [Column("light_intensity")]
     public int? LightIntensity { get; set; }
 
+    [Column("light_intensity_raw")]
+    public decimal? LightIntensityRaw { get; set; }
+
     // For backward compatibility
     [NotMapped]
-    public double? Tds => TdsPpm;
+    public double? Tds => (double?)(TdsRaw ?? TdsPpm);
 
     [NotMapped]
-    public double? WaterTemperature => WaterTemp;
+    public double? WaterTemperature => (double?)(WaterTempRaw ?? WaterTemp);
 
     [NotMapped]
-    public double? AirHumidity => Humidity;
+    public double? AirHumidity => (double?)(HumidityRaw ?? Humidity);
 
     [NotMapped]
-    public double? Light => LightIntensity;
+    public double? Light => (double?)(LightIntensityRaw ?? LightIntensity);
 
     // Foreign key to Device
     public Device Device { get; set; } = null!;

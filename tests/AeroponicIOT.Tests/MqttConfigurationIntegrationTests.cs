@@ -29,5 +29,11 @@ public class MqttConfigurationIntegrationTests : IClassFixture<TestWebApplicatio
 
         Assert.Equal("test-broker.local", data.GetProperty("host").GetString());
         Assert.Equal(28883, data.GetProperty("port").GetInt32());
+        Assert.False(data.GetProperty("tlsEnabled").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("tlsPort").ValueKind);
+        Assert.True(data.GetProperty("plaintextEndpointEnabled").GetBoolean());
+        Assert.False(data.GetProperty("clientCertificateRequired").GetBoolean());
+        Assert.Equal(0, data.GetProperty("clientCertificateIssuerAllowlistCount").GetInt32());
+        Assert.Equal(0, data.GetProperty("clientCertificateThumbprintAllowlistCount").GetInt32());
     }
 }

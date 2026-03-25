@@ -7,6 +7,10 @@ using MQTTnet.Adapter;
 using MQTTnet.Diagnostics;
 using MQTTnet.Protocol;
 using MQTTnet.Server;
+using System.Collections.Concurrent;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 
@@ -20,7 +24,9 @@ public class MqttService : IMqttService, IDisposable
 {
     private readonly ILogger<MqttService> _logger;
     private readonly MqttSettingsOptions _mqttOptions;
+    private readonly ProvisioningOptions _provisioningOptions;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ConcurrentDictionary<string, string> _authorizedClientMacs = new(StringComparer.OrdinalIgnoreCase);
     private MqttServer? _mqttServer;
     private bool _isRunning;
 
@@ -29,10 +35,12 @@ public class MqttService : IMqttService, IDisposable
     public MqttService(
         ILogger<MqttService> logger,
         IOptions<MqttSettingsOptions> mqttOptions,
+        IOptions<ProvisioningOptions> provisioningOptions,
         IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
         _mqttOptions = mqttOptions.Value;
+        _provisioningOptions = provisioningOptions.Value;
         _scopeFactory = scopeFactory;
     }
 
@@ -48,9 +56,32 @@ public class MqttService : IMqttService, IDisposable
                 .WithDefaultEndpointPort(port)
                 .WithDefaultEndpointBoundIPAddress(System.Net.IPAddress.Any);
 
+            if (_mqttOptions.EnableTls)
+            {
+                var serverCertificate = LoadServerCertificate(
+                    _mqttOptions.ServerCertificatePath,
+                    _mqttOptions.ServerCertificatePassword);
+
+                optionsBuilder
+                    .WithEncryptedEndpoint()
+                    .WithEncryptedEndpointPort(_mqttOptions.TlsPort)
+                    .WithEncryptionCertificate(serverCertificate);
+
+                if (_mqttOptions.RequireClientCertificate)
+                {
+                    optionsBuilder.WithClientCertificate(ValidateClientCertificate, true);
+                }
+
+                if (_mqttOptions.DisablePlaintextEndpoint)
+                {
+                    optionsBuilder.WithoutDefaultEndpoint();
+                }
+            }
+
             // If MQTT username/password are configured, enforce connection authentication
             var mqttUser = _mqttOptions.Username;
             var mqttPassword = _mqttOptions.Password;
+            var requireClientAuthentication = _mqttOptions.RequireClientAuthentication;
 
             var options = optionsBuilder.Build();
 
@@ -68,10 +99,11 @@ public class MqttService : IMqttService, IDisposable
             _mqttServer.ClientDisconnectedAsync += async e =>
             {
                 _logger.LogInformation("MQTT Client disconnected: {ClientId}", e.ClientId);
+                _authorizedClientMacs.TryRemove(e.ClientId, out _);
                 await Task.CompletedTask;
             };
 
-            if (!string.IsNullOrWhiteSpace(mqttUser) && !string.IsNullOrWhiteSpace(mqttPassword))
+            if (requireClientAuthentication)
             {
                 _mqttServer.ValidatingConnectionAsync += async e =>
                 {
@@ -82,13 +114,38 @@ public class MqttService : IMqttService, IDisposable
                         return;
                     }
 
-                    if (e.UserName != mqttUser || e.Password != mqttPassword)
+                    // Administrative credentials are allowed for trusted tools.
+                    if (!string.IsNullOrWhiteSpace(mqttUser)
+                        && !string.IsNullOrWhiteSpace(mqttPassword)
+                        && e.UserName == mqttUser
+                        && e.Password == mqttPassword)
+                    {
+                        e.ReasonCode = MqttConnectReasonCode.Success;
+                        await Task.CompletedTask;
+                        return;
+                    }
+
+                    // Device credentials: username must be MAC and password must match derived secret.
+                    var normalizedMac = NormalizeMacAddress(e.UserName);
+                    if (normalizedMac == null)
                     {
                         e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
                         await Task.CompletedTask;
                         return;
                     }
 
+                    var expectedPassword = ComputeDevicePassword(normalizedMac, _provisioningOptions.SharedKey);
+                    var providedBytes = Encoding.UTF8.GetBytes(e.Password);
+                    var expectedBytes = Encoding.UTF8.GetBytes(expectedPassword);
+
+                    if (!CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes))
+                    {
+                        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+                        await Task.CompletedTask;
+                        return;
+                    }
+
+                    _authorizedClientMacs[e.ClientId] = normalizedMac;
                     e.ReasonCode = MqttConnectReasonCode.Success;
                     await Task.CompletedTask;
                 };
@@ -100,7 +157,12 @@ public class MqttService : IMqttService, IDisposable
             await _mqttServer.StartAsync();
             _isRunning = true;
 
-            _logger.LogInformation("MQTT Broker started on port {Port}", port);
+            _logger.LogInformation(
+                "MQTT Broker started. PlaintextPort={PlaintextPort}, TlsEnabled={TlsEnabled}, TlsPort={TlsPort}, ClientCertRequired={ClientCertRequired}",
+                _mqttOptions.DisablePlaintextEndpoint ? 0 : port,
+                _mqttOptions.EnableTls,
+                _mqttOptions.EnableTls ? _mqttOptions.TlsPort : 0,
+                _mqttOptions.RequireClientCertificate);
         }
         catch (Exception ex)
         {
@@ -186,7 +248,8 @@ public class MqttService : IMqttService, IDisposable
             }
 
             // Expect sensor messages on: devices/{macAddress}/sensor
-            if (!topic.StartsWith("devices/", StringComparison.OrdinalIgnoreCase) ||
+            var expectedPrefix = _mqttOptions.DeviceTopicPrefix.Trim().Trim('/');
+            if (!topic.StartsWith($"{expectedPrefix}/", StringComparison.OrdinalIgnoreCase) ||
                 !topic.EndsWith("/sensor", StringComparison.OrdinalIgnoreCase))
             {
                 return;
@@ -199,6 +262,21 @@ public class MqttService : IMqttService, IDisposable
             }
 
             var macAddress = segments[1];
+
+            if (_mqttOptions.EnforceTopicAcl &&
+                !string.Equals(args.ClientId, "ServerPublisher", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!_authorizedClientMacs.TryGetValue(args.ClientId, out var authorizedMac) ||
+                    !string.Equals(authorizedMac, NormalizeMacAddress(macAddress), StringComparison.OrdinalIgnoreCase))
+                {
+                    args.ProcessPublish = false;
+                    _logger.LogWarning(
+                        "MQTT publish denied by ACL. ClientId={ClientId}, Topic={Topic}",
+                        args.ClientId,
+                        topic);
+                    return;
+                }
+            }
 
             var payloadBytes = args.ApplicationMessage.PayloadSegment;
             if (payloadBytes.Count == 0)
@@ -241,5 +319,86 @@ public class MqttService : IMqttService, IDisposable
         {
             _logger.LogError(ex, "Error processing MQTT sensor message");
         }
+    }
+
+    private static string? NormalizeMacAddress(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim().ToUpperInvariant();
+        var pattern = @"^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(trimmed, pattern))
+        {
+            return null;
+        }
+
+        return trimmed.Replace('-', ':');
+    }
+
+    private static string ComputeDevicePassword(string normalizedMac, string sharedKey)
+    {
+        var keyBytes = Encoding.UTF8.GetBytes(sharedKey);
+        var dataBytes = Encoding.UTF8.GetBytes(normalizedMac);
+        using var hmac = new HMACSHA256(keyBytes);
+        var hash = hmac.ComputeHash(dataBytes);
+        return Convert.ToHexString(hash);
+    }
+
+    private static X509Certificate2 LoadServerCertificate(string? certificatePath, string? certificatePassword)
+    {
+        if (string.IsNullOrWhiteSpace(certificatePath))
+        {
+            throw new InvalidOperationException("MQTT TLS is enabled but MqttSettings:ServerCertificatePath is not configured.");
+        }
+
+        if (!File.Exists(certificatePath))
+        {
+            throw new FileNotFoundException("MQTT server certificate file was not found.", certificatePath);
+        }
+
+        return new X509Certificate2(certificatePath, certificatePassword);
+    }
+
+    private bool ValidateClientCertificate(
+        object sender,
+        X509Certificate? certificate,
+        X509Chain? chain,
+        SslPolicyErrors sslPolicyErrors)
+    {
+        if (certificate is null || sslPolicyErrors != SslPolicyErrors.None)
+        {
+            return false;
+        }
+
+        var cert2 = certificate as X509Certificate2 ?? new X509Certificate2(certificate);
+
+        var allowlistedIssuers = _mqttOptions.AllowedClientCertificateIssuers
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v.Trim())
+            .ToArray();
+
+        var allowlistedThumbprints = _mqttOptions.AllowedClientCertificateThumbprints
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(NormalizeThumbprint)
+            .ToArray();
+
+        var issuerMatched = allowlistedIssuers.Length == 0 ||
+            allowlistedIssuers.Any(issuer =>
+                string.Equals(cert2.Issuer, issuer, StringComparison.OrdinalIgnoreCase));
+
+        var certThumbprint = NormalizeThumbprint(cert2.Thumbprint ?? string.Empty);
+        var thumbprintMatched = allowlistedThumbprints.Length == 0 ||
+            allowlistedThumbprints.Contains(certThumbprint, StringComparer.OrdinalIgnoreCase);
+
+        return issuerMatched && thumbprintMatched;
+    }
+
+    private static string NormalizeThumbprint(string thumbprint)
+    {
+        return thumbprint.Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToUpperInvariant();
     }
 }
