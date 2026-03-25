@@ -35,6 +35,11 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
                 ["RateLimiting:DeviceOnboarding:WindowSeconds"] = "60",
                 ["Provisioning:SharedKey"] = "test-shared-key-123",
                 ["Provisioning:ClaimCodeMinutes"] = "10",
+                ["AppUrls:DashboardBaseUrl"] = "http://localhost:5062",
+                ["OnboardingProtection:FailedAttemptThreshold"] = "5",
+                ["OnboardingProtection:FailedAttemptWindowSeconds"] = "30",
+                ["OnboardingProtection:FailedAttemptCooldownSeconds"] = "2",
+                ["OnboardingProtection:StateTtlSeconds"] = "60",
                 ["ConnectionStrings:DefaultConnection"] = "Server=(localdb)\\mssqllocaldb;Database=AeroponicIOT_Test;Trusted_Connection=True;MultipleActiveResultSets=true"
             };
 

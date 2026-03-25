@@ -1,5 +1,6 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
+using AeroponicIOT.Exceptions;
 using AeroponicIOT.Models;
 using AeroponicIOT.Services.Notifications;
 using Microsoft.EntityFrameworkCore;
@@ -30,19 +31,21 @@ public class SensorIngestionService : ISensorIngestionService
         if (sensorData == null || string.IsNullOrWhiteSpace(sensorData.MacAddress))
         {
             _logger.LogWarning("Invalid sensor data received");
-            throw new ArgumentException("Invalid sensor data");
+            throw new DomainValidationException("MAC address is required");
         }
+
+        var normalizedMac = sensorData.MacAddress.Trim().ToUpperInvariant();
 
         // Find device by MAC address
         var device = await _context.Devices
             .Include(d => d.Crop)
-            .ThenInclude(c => (c ?? new Crop()).CropStages)
-            .FirstOrDefaultAsync(d => d.MacAddress == sensorData.MacAddress, cancellationToken);
+            .ThenInclude(c => c!.CropStages)
+            .FirstOrDefaultAsync(d => d.MacAddress == normalizedMac, cancellationToken);
 
         if (device == null)
         {
-            _logger.LogWarning("Device with MAC {MacAddress} not found", sensorData.MacAddress);
-            throw new InvalidOperationException($"Device with MAC address {sensorData.MacAddress} not found");
+            _logger.LogWarning("Device with MAC {MacAddress} not found", normalizedMac);
+            throw new ResourceNotFoundException($"Device with MAC address {normalizedMac} not found");
         }
 
         // Update device last seen

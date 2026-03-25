@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Reflection;
-using AeroponicIOT.Controllers;
 using AeroponicIOT.Data;
 using AeroponicIOT.Models;
 using AeroponicIOT.Tests.Infrastructure;
@@ -24,7 +22,6 @@ public class ProvisioningOnboardingRateLimitIntegrationTests : IClassFixture<Tes
     public async Task SelfRegister_InvalidProvisioningKey_TriggersCooldownAndRetryAfter()
     {
         await ResetDatabaseAsync(_ => { });
-        ClearOnboardingAttemptState();
 
         using var client = _factory.CreateClient();
         var payload = new
@@ -71,8 +68,6 @@ public class ProvisioningOnboardingRateLimitIntegrationTests : IClassFixture<Tes
                 CreatedAt = DateTime.UtcNow
             });
         });
-        ClearOnboardingAttemptState();
-
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Test-UserId", "1");
         client.DefaultRequestHeaders.Add("X-Test-Role", "Farmer");
@@ -105,7 +100,6 @@ public class ProvisioningOnboardingRateLimitIntegrationTests : IClassFixture<Tes
     public async Task SelfRegister_CooldownIsScopedByMacAddress_NotGlobal()
     {
         await ResetDatabaseAsync(_ => { });
-        ClearOnboardingAttemptState();
 
         using var client = _factory.CreateClient();
 
@@ -150,7 +144,6 @@ public class ProvisioningOnboardingRateLimitIntegrationTests : IClassFixture<Tes
     public async Task SelfRegister_CooldownExpiry_AllowsRequestAfterStateExpires()
     {
         await ResetDatabaseAsync(_ => { });
-        ClearOnboardingAttemptState();
 
         using var client = _factory.CreateClient();
         var payload = new
@@ -171,7 +164,7 @@ public class ProvisioningOnboardingRateLimitIntegrationTests : IClassFixture<Tes
         var blockedResponse = await client.PostAsJsonAsync("/api/device/self-register", payload);
         Assert.Equal(HttpStatusCode.TooManyRequests, blockedResponse.StatusCode);
 
-        ForceExpireOnboardingCooldowns();
+        await Task.Delay(TimeSpan.FromSeconds(3));
 
         client.DefaultRequestHeaders.Remove("X-Device-Key");
         client.DefaultRequestHeaders.Add("X-Device-Key", "test-shared-key-123");
@@ -184,7 +177,6 @@ public class ProvisioningOnboardingRateLimitIntegrationTests : IClassFixture<Tes
     public async Task SelfRegister_SuccessResetsFailedAttemptCounterForAttemptKey()
     {
         await ResetDatabaseAsync(_ => { });
-        ClearOnboardingAttemptState();
 
         using var client = _factory.CreateClient();
         var payload = new
@@ -219,65 +211,6 @@ public class ProvisioningOnboardingRateLimitIntegrationTests : IClassFixture<Tes
 
         var blockedResponse = await client.PostAsJsonAsync("/api/device/self-register", payload);
         Assert.Equal(HttpStatusCode.TooManyRequests, blockedResponse.StatusCode);
-    }
-
-    private static void ClearOnboardingAttemptState()
-    {
-        var dictionary = GetOnboardingAttemptDictionary();
-        var clearMethod = dictionary.GetType().GetMethod("Clear", BindingFlags.Public | BindingFlags.Instance);
-        Assert.NotNull(clearMethod);
-
-        clearMethod!.Invoke(dictionary, null);
-    }
-
-    private static void ForceExpireOnboardingCooldowns()
-    {
-        var dictionary = GetOnboardingAttemptDictionary();
-        var stateType = typeof(DeviceController).GetNestedType("OnboardingAttemptState", BindingFlags.NonPublic);
-        Assert.NotNull(stateType);
-
-        var ctor = stateType!.GetConstructors(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)
-            .Single(c =>
-            {
-                var parameters = c.GetParameters();
-                return parameters.Length == 3
-                    && parameters[0].ParameterType == typeof(int)
-                    && parameters[1].ParameterType == typeof(DateTimeOffset)
-                    && parameters[2].ParameterType == typeof(DateTimeOffset?);
-            });
-
-        var expiredState = ctor.Invoke(new object?[]
-        {
-            5,
-            DateTimeOffset.UtcNow.AddMinutes(-1),
-            DateTimeOffset.UtcNow.AddSeconds(-1)
-        });
-
-        var keysProperty = dictionary.GetType().GetProperty("Keys", BindingFlags.Public | BindingFlags.Instance);
-        Assert.NotNull(keysProperty);
-
-        var keys = ((System.Collections.IEnumerable)keysProperty!.GetValue(dictionary)!)
-            .Cast<object>()
-            .ToList();
-
-        var indexer = dictionary.GetType().GetProperty("Item", BindingFlags.Public | BindingFlags.Instance);
-        Assert.NotNull(indexer);
-
-        foreach (var key in keys)
-        {
-            indexer!.SetValue(dictionary, expiredState, new[] { key });
-        }
-    }
-
-    private static object GetOnboardingAttemptDictionary()
-    {
-        var field = typeof(DeviceController).GetField("FailedOnboardingAttempts", BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.NotNull(field);
-
-        var dictionary = field!.GetValue(null);
-        Assert.NotNull(dictionary);
-
-        return dictionary!;
     }
 
     private async Task ResetDatabaseAsync(Action<ApplicationDbContext> seed)

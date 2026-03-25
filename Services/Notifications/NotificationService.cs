@@ -1,6 +1,8 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.Models;
+using AeroponicIOT.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AeroponicIOT.Services.Notifications;
 
@@ -12,12 +14,18 @@ public class NotificationService : INotificationService
     private readonly ApplicationDbContext _context;
     private readonly IEmailService _emailService;
     private readonly ILogger<NotificationService> _logger;
+    private readonly AppUrlsOptions _appUrlsOptions;
 
-    public NotificationService(ApplicationDbContext context, IEmailService emailService, ILogger<NotificationService> logger)
+    public NotificationService(
+        ApplicationDbContext context,
+        IEmailService emailService,
+        ILogger<NotificationService> logger,
+        IOptions<AppUrlsOptions> appUrlsOptions)
     {
         _context = context;
         _emailService = emailService;
         _logger = logger;
+        _appUrlsOptions = appUrlsOptions.Value;
     }
 
     /// <summary>
@@ -168,14 +176,11 @@ public class NotificationService : INotificationService
     {
         try
         {
-            var notifications = await _context.Notifications
+            var deletedCount = await _context.Notifications
                 .Where(n => n.UserId == userId)
-                .ToListAsync();
+                .ExecuteDeleteAsync();
 
-            _context.Notifications.RemoveRange(notifications);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Cleared {Count} notifications for user {UserId}", notifications.Count, userId);
+            _logger.LogInformation("Cleared {Count} notifications for user {UserId}", deletedCount, userId);
         }
         catch (Exception ex)
         {
@@ -188,6 +193,7 @@ public class NotificationService : INotificationService
     /// </summary>
     private string GenerateEmailHtml(string title, string message, NotificationType type)
     {
+        var dashboardUrl = _appUrlsOptions.DashboardBaseUrl.TrimEnd('/');
         var typeColor = type switch
         {
             NotificationType.Alert => "#dc3545",
@@ -220,7 +226,7 @@ public class NotificationService : INotificationService
         </div>
         <div class='footer'>
             <p>Sent by Smart Farm IoT System</p>
-            <p>Login to your dashboard to view more details: <a href='http://localhost:5062'>Smart Farm Dashboard</a></p>
+            <p>Login to your dashboard to view more details: <a href='{dashboardUrl}'>{dashboardUrl}</a></p>
         </div>
     </div>
 </body>

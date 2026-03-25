@@ -15,16 +15,13 @@ namespace AeroponicIOT.Controllers;
 public class SensorController : ControllerBase
 {
     private readonly ISensorIngestionService _sensorIngestionService;
-    private readonly ILogger<SensorController> _logger;
     private readonly ProvisioningOptions _provisioningOptions;
 
     public SensorController(
         ISensorIngestionService sensorIngestionService,
-        ILogger<SensorController> logger,
         IOptions<ProvisioningOptions> provisioningOptions)
     {
         _sensorIngestionService = sensorIngestionService;
-        _logger = logger;
         _provisioningOptions = provisioningOptions.Value;
     }
 
@@ -32,22 +29,14 @@ public class SensorController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ReceiveSensorData([FromBody] SensorDataDto sensorData)
     {
-        try
+        if (!(User?.Identity?.IsAuthenticated ?? false) && !HasValidDeviceKey())
         {
-            if (!(User?.Identity?.IsAuthenticated ?? false) && !HasValidDeviceKey())
-            {
-                return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "Missing or invalid device key");
-            }
-
-            await _sensorIngestionService.ProcessSensorDataAsync(sensorData, HttpContext.RequestAborted);
-
-            return Ok(ApiResponse.Success<object?>(null, "Sensor data received successfully"));
+            return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "Missing or invalid device key");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing sensor data");
-            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error processing sensor data");
-        }
+
+        await _sensorIngestionService.ProcessSensorDataAsync(sensorData, HttpContext.RequestAborted);
+
+        return Ok(ApiResponse.Success<object?>(null, "Sensor data received successfully"));
     }
 
     private IActionResult ApiProblem(int statusCode, string title, string detail)

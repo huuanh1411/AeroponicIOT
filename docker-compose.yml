@@ -13,6 +13,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
+      - Redis__Configuration=${REDIS_CONFIGURATION:-}
       - JwtSettings__SecretKey=${JWT_SECRET_KEY}
       - JwtSettings__Issuer=AeroponicIOT
       - JwtSettings__Audience=AeroponicIOT
@@ -28,4 +29,16 @@ services:
       - EmailSettings__SmtpPassword=${SMTP_PASSWORD:-}
       - EmailSettings__FromEmail=${FROM_EMAIL:-noreply@smartfarmiot.com}
       - EmailSettings__FromName=Smart Farm IoT System
+      - OpenTelemetry__ServiceName=AeroponicIOT
+      - OpenTelemetry__Tracing__SampleRatio=${OTEL_TRACE_SAMPLE_RATIO:-0.25}
+      - OpenTelemetry__Otlp__Endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: aeroponiciot-redis
+    profiles:
+      - redis
+    ports:
+      - "6379:6379"
     restart: unless-stopped

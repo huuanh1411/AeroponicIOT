@@ -2,12 +2,12 @@ using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
 using AeroponicIOT.Options;
+using AeroponicIOT.Services.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Security.Claims;
 
@@ -18,23 +18,21 @@ namespace AeroponicIOT.Controllers;
 [Authorize]
 public class DeviceController : ControllerBase
 {
-    private static readonly TimeSpan FailedAttemptWindow = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan FailedAttemptCooldown = TimeSpan.FromMinutes(2);
-    private const int FailedAttemptThreshold = 5;
-    private static readonly ConcurrentDictionary<string, OnboardingAttemptState> FailedOnboardingAttempts = new();
-
     private readonly ApplicationDbContext _context;
     private readonly ILogger<DeviceController> _logger;
     private readonly ProvisioningOptions _provisioningOptions;
+    private readonly IOnboardingAttemptTracker _onboardingAttemptTracker;
 
     public DeviceController(
         ApplicationDbContext context,
         ILogger<DeviceController> logger,
-        IOptions<ProvisioningOptions> provisioningOptions)
+        IOptions<ProvisioningOptions> provisioningOptions,
+        IOnboardingAttemptTracker onboardingAttemptTracker)
     {
         _context = context;
         _logger = logger;
         _provisioningOptions = provisioningOptions.Value;
+        _onboardingAttemptTracker = onboardingAttemptTracker;
     }
 
     private int GetCurrentUserId()
@@ -157,7 +155,7 @@ public class DeviceController : ControllerBase
         try
         {
             var attemptKey = BuildSelfRegisterAttemptKey(request);
-            if (TryGetCooldownResponse(attemptKey, out var cooldownResponse))
+            if (await TryGetCooldownResponseAsync(attemptKey, HttpContext.RequestAborted) is { } cooldownResponse)
             {
                 return cooldownResponse;
             }
@@ -173,14 +171,14 @@ public class DeviceController : ControllerBase
 
             if (string.IsNullOrWhiteSpace(providedKey) || !CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(providedKey), System.Text.Encoding.UTF8.GetBytes(configuredKey)))
             {
-                RegisterFailedAttempt(attemptKey);
+                await _onboardingAttemptTracker.RegisterFailedAttemptAsync(attemptKey, HttpContext.RequestAborted);
                 _logger.LogWarning("Invalid provisioning key for self-register request");
                 return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "Invalid provisioning key");
             }
 
             if (string.IsNullOrWhiteSpace(request.MacAddress) || !IsValidMacAddress(request.MacAddress))
             {
-                RegisterFailedAttempt(attemptKey);
+                await _onboardingAttemptTracker.RegisterFailedAttemptAsync(attemptKey, HttpContext.RequestAborted);
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Invalid MAC address format");
             }
 
@@ -244,7 +242,7 @@ public class DeviceController : ControllerBase
 
             _context.Devices.Update(device);
             await _context.SaveChangesAsync();
-            ResetFailedAttempts(attemptKey);
+            await _onboardingAttemptTracker.ResetAsync(attemptKey, HttpContext.RequestAborted);
 
             return Ok(ApiResponse.Success(new DeviceSelfRegisterResponseDto
             {
@@ -271,14 +269,14 @@ public class DeviceController : ControllerBase
         {
             var userId = GetCurrentUserId();
             var attemptKey = BuildClaimAttemptKey(request);
-            if (TryGetCooldownResponse(attemptKey, out var cooldownResponse))
+            if (await TryGetCooldownResponseAsync(attemptKey, HttpContext.RequestAborted) is { } cooldownResponse)
             {
                 return cooldownResponse;
             }
 
             if (string.IsNullOrWhiteSpace(request.ClaimCode))
             {
-                RegisterFailedAttempt(attemptKey);
+                await _onboardingAttemptTracker.RegisterFailedAttemptAsync(attemptKey, HttpContext.RequestAborted);
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Claim code is required");
             }
 
@@ -288,13 +286,13 @@ public class DeviceController : ControllerBase
 
             if (device == null)
             {
-                RegisterFailedAttempt(attemptKey);
+                await _onboardingAttemptTracker.RegisterFailedAttemptAsync(attemptKey, HttpContext.RequestAborted);
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Claim code is invalid or device already claimed");
             }
 
             if (!device.ClaimCodeExpiresAt.HasValue || device.ClaimCodeExpiresAt.Value < DateTime.UtcNow)
             {
-                RegisterFailedAttempt(attemptKey);
+                await _onboardingAttemptTracker.RegisterFailedAttemptAsync(attemptKey, HttpContext.RequestAborted);
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Claim code has expired. Restart device provisioning to get a new code");
             }
 
@@ -332,7 +330,7 @@ public class DeviceController : ControllerBase
 
             _context.Devices.Update(device);
             await _context.SaveChangesAsync();
-            ResetFailedAttempts(attemptKey);
+            await _onboardingAttemptTracker.ResetAsync(attemptKey, HttpContext.RequestAborted);
 
             _logger.LogInformation("User {UserId} claimed device {DeviceId} ({MacAddress})", userId, device.Id, device.MacAddress);
 
@@ -674,78 +672,17 @@ public class DeviceController : ControllerBase
         return $"claim:{ip}:{code}";
     }
 
-    private bool TryGetCooldownResponse(string attemptKey, out IActionResult response)
+    private async Task<IActionResult?> TryGetCooldownResponseAsync(string attemptKey, CancellationToken cancellationToken)
     {
-        response = default!;
-        if (!TryGetCooldownRemainingSeconds(attemptKey, out var retryAfterSeconds))
+        var retryAfterSeconds = await _onboardingAttemptTracker.GetCooldownRemainingSecondsAsync(attemptKey, cancellationToken);
+        if (!retryAfterSeconds.HasValue)
         {
-            return false;
+            return null;
         }
 
-        Response.Headers["Retry-After"] = retryAfterSeconds.ToString();
-        response = ApiProblem(StatusCodes.Status429TooManyRequests, "Too Many Requests", "Too many invalid onboarding attempts. Please retry later.");
-        return true;
+        Response.Headers["Retry-After"] = retryAfterSeconds.Value.ToString();
+        return ApiProblem(StatusCodes.Status429TooManyRequests, "Too Many Requests", "Too many invalid onboarding attempts. Please retry later.");
     }
-
-    private static bool TryGetCooldownRemainingSeconds(string attemptKey, out int retryAfterSeconds)
-    {
-        retryAfterSeconds = 0;
-        if (!FailedOnboardingAttempts.TryGetValue(attemptKey, out var state))
-        {
-            return false;
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        if (state.BlockedUntilUtc.HasValue && state.BlockedUntilUtc.Value > now)
-        {
-            retryAfterSeconds = (int)Math.Ceiling((state.BlockedUntilUtc.Value - now).TotalSeconds);
-            return true;
-        }
-
-        if (state.BlockedUntilUtc.HasValue && state.BlockedUntilUtc.Value <= now)
-        {
-            FailedOnboardingAttempts.TryRemove(attemptKey, out _);
-        }
-
-        return false;
-    }
-
-    private static void RegisterFailedAttempt(string attemptKey)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        FailedOnboardingAttempts.AddOrUpdate(
-            attemptKey,
-            _ => new OnboardingAttemptState(1, now, null),
-            (_, current) =>
-            {
-                if (current.BlockedUntilUtc.HasValue && current.BlockedUntilUtc.Value > now)
-                {
-                    return current;
-                }
-
-                var windowStart = current.WindowStartUtc;
-                var count = current.Count;
-
-                if (now - windowStart > FailedAttemptWindow)
-                {
-                    windowStart = now;
-                    count = 0;
-                }
-
-                count++;
-                DateTimeOffset? blockedUntil = count >= FailedAttemptThreshold ? now.Add(FailedAttemptCooldown) : null;
-
-                return new OnboardingAttemptState(count, windowStart, blockedUntil);
-            });
-    }
-
-    private static void ResetFailedAttempts(string attemptKey)
-    {
-        FailedOnboardingAttempts.TryRemove(attemptKey, out _);
-    }
-
-    private sealed record OnboardingAttemptState(int Count, DateTimeOffset WindowStartUtc, DateTimeOffset? BlockedUntilUtc);
 
     // Helper method to validate MAC address format
     private bool IsValidMacAddress(string macAddress)

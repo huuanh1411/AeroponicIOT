@@ -5,13 +5,21 @@ using AeroponicIOT.Services.Mqtt;
 using AeroponicIOT.Services.Notifications;
 using AeroponicIOT.Services.Sensors;
 using AeroponicIOT.Services.Maintenance;
+using AeroponicIOT.Services.Security;
 using AeroponicIOT.Middleware;
 using AeroponicIOT.Options;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,6 +49,16 @@ builder.Services.AddOptions<EmailSettingsOptions>()
     .ValidateDataAnnotations()
     .Validate(o => !o.Enabled || !string.IsNullOrWhiteSpace(o.SmtpHost), "EmailSettings:SmtpHost is required when email is enabled")
     .Validate(o => !o.Enabled || !string.IsNullOrWhiteSpace(o.FromEmail), "EmailSettings:FromEmail is required when email is enabled")
+    .ValidateOnStart();
+
+builder.Services.AddOptions<AppUrlsOptions>()
+    .Bind(builder.Configuration.GetSection("AppUrls"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<OnboardingProtectionOptions>()
+    .Bind(builder.Configuration.GetSection("OnboardingProtection"))
+    .ValidateDataAnnotations()
     .ValidateOnStart();
 
 builder.Services.AddOptions<CorsOptions>()
@@ -139,6 +157,82 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+var redisConfiguration = builder.Configuration["Redis:Configuration"];
+if (!string.IsNullOrWhiteSpace(redisConfiguration))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConfiguration;
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
+builder.Services.AddScoped<IOnboardingAttemptTracker, DistributedOnboardingAttemptTracker>();
+
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Application is running"), tags: new[] { "live" })
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" })
+    .AddCheck<MqttHealthCheck>("mqtt", tags: new[] { "ready" });
+
+var serviceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "AeroponicIOT";
+var otlpEndpoint = builder.Configuration["OpenTelemetry:Otlp:Endpoint"];
+var traceSampleRatio = builder.Configuration.GetValue<double?>("OpenTelemetry:Tracing:SampleRatio") ?? 1.0d;
+traceSampleRatio = Math.Clamp(traceSampleRatio, 0.0d, 1.0d);
+var telemetryExcludedPaths = builder.Configuration
+    .GetSection("OpenTelemetry:ExcludedPaths")
+    .Get<string[]>()
+    ?? new[] { "/health", "/health/live", "/health/ready" };
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(serviceName))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .SetSampler(new TraceIdRatioBasedSampler(traceSampleRatio))
+            .AddAspNetCoreInstrumentation(options =>
+            {
+                options.Filter = httpContext =>
+                    !telemetryExcludedPaths.Any(path =>
+                        httpContext.Request.Path.StartsWithSegments(path, StringComparison.OrdinalIgnoreCase));
+            })
+            .AddHttpClientInstrumentation();
+
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+        {
+            tracing.AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(otlpEndpoint);
+            });
+        }
+    })
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddMeter(
+                "Microsoft.AspNetCore.Hosting",
+                "Microsoft.AspNetCore.Server.Kestrel",
+                "System.Net.Http")
+            .AddRuntimeInstrumentation();
+
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+        {
+            metrics.AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(otlpEndpoint);
+            });
+        }
+    });
+
 // Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -165,8 +259,13 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+app.UseForwardedHeaders();
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors("ConfiguredOrigins");
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -175,54 +274,21 @@ app.UseAuthorization();
 // Serve static files
 app.UseStaticFiles();
 
-// Health endpoint (DB + MQTT)
-app.MapGet("/health", async (ApplicationDbContext db, IMqttService mqtt, ILogger<Program> logger, CancellationToken ct) =>
+app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
-    try
-    {
-        var canConnect = await db.Database.CanConnectAsync(ct);
-        if (!canConnect)
-        {
-            return Results.Json(new
-            {
-                status = "Unhealthy",
-                db = "Unavailable",
-                mqtt = mqtt.IsRunning ? "Running" : "Stopped",
-                timestamp = DateTime.UtcNow
-            }, statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Health check failed while connecting to database");
-        return Results.Json(new
-        {
-            status = "Unhealthy",
-            db = "Error",
-            mqtt = mqtt.IsRunning ? "Running" : "Stopped",
-            error = "Database health check failed",
-            timestamp = DateTime.UtcNow
-        }, statusCode: StatusCodes.Status503ServiceUnavailable);
-    }
+    Predicate = check => check.Tags.Contains("live"),
+    ResponseWriter = WriteHealthResponseAsync
+});
 
-    if (!mqtt.IsRunning)
-    {
-        return Results.Json(new
-        {
-            status = "Unhealthy",
-            db = "Connected",
-            mqtt = "Stopped",
-            timestamp = DateTime.UtcNow
-        }, statusCode: StatusCodes.Status503ServiceUnavailable);
-    }
-
-    return Results.Ok(new
-    {
-        status = "Healthy",
-        db = "Connected",
-        mqtt = "Running",
-        timestamp = DateTime.UtcNow
-    });
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = WriteHealthResponseAsync
+});
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = WriteHealthResponseAsync
 });
 
 // Default route to dashboard
@@ -268,6 +334,29 @@ catch (Exception ex)
 }
 
 app.Run();
+
+static Task WriteHealthResponseAsync(HttpContext context, HealthReport report)
+{
+    context.Response.ContentType = "application/json";
+
+    var payload = new
+    {
+        status = report.Status.ToString(),
+        totalDurationMs = Math.Round(report.TotalDuration.TotalMilliseconds, 2),
+        timestamp = DateTime.UtcNow,
+        checks = report.Entries.Select(entry => new
+        {
+            name = entry.Key,
+            status = entry.Value.Status.ToString(),
+            description = entry.Value.Description,
+            durationMs = Math.Round(entry.Value.Duration.TotalMilliseconds, 2),
+            error = entry.Value.Exception?.Message,
+            data = entry.Value.Data
+        })
+    };
+
+    return context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+}
 
 static async Task SeedDefaultCropsAsync(ApplicationDbContext dbContext, ILogger logger)
 {

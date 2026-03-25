@@ -111,6 +111,66 @@ The API uses an allowlist from `Cors:AllowedOrigins`.
 Environment-variable example:
 `Cors__AllowedOrigins__0=https://your-frontend.example.com`
 
+## Health And Readiness
+
+The API exposes structured JSON health endpoints:
+
+- `GET /health/live`: Liveness probe (process is running)
+- `GET /health/ready`: Readiness probe (database + MQTT dependencies)
+- `GET /health`: Alias for readiness
+
+Example response:
+
+```json
+{
+  "status": "Healthy",
+  "totalDurationMs": 3.14,
+  "timestamp": "2026-03-25T12:00:00Z",
+  "checks": [
+    {
+      "name": "database",
+      "status": "Healthy",
+      "description": "Database is reachable",
+      "durationMs": 1.2,
+      "error": null,
+      "data": {}
+    }
+  ]
+}
+```
+
+## Redis-Backed Onboarding Protection
+
+Device onboarding attempt tracking uses distributed cache.
+
+- If `Redis:Configuration` is set, Redis is used.
+- If not set, the app falls back to in-memory distributed cache.
+
+Run with Redis via Docker Compose profile:
+
+```bash
+REDIS_CONFIGURATION=redis:6379 docker compose --profile redis up --build
+```
+
+## OpenTelemetry
+
+OpenTelemetry tracing and metrics are enabled with configurable sampling and path exclusions.
+
+Configuration keys:
+
+- `OpenTelemetry:ServiceName`
+- `OpenTelemetry:Tracing:SampleRatio` (0.0 to 1.0)
+- `OpenTelemetry:ExcludedPaths` (e.g., health endpoints)
+- `OpenTelemetry:Otlp:Endpoint` (optional OTLP endpoint)
+
+Environment-variable example:
+
+```bash
+OpenTelemetry__ServiceName=AeroponicIOT \
+OpenTelemetry__Tracing__SampleRatio=0.25 \
+OpenTelemetry__Otlp__Endpoint=http://otel-collector:4317
+```
+
 ## MQTT Integration
 
 The system includes a built-in MQTT broker for real-time IoT device communication.
