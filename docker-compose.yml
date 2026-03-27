@@ -33,6 +33,8 @@ services:
       - MqttSettings__AllowedClientCertificateThumbprints__0=${MQTT_ALLOWED_CLIENT_CERT_THUMBPRINT_0:-}
       - MqttSettings__EnforceTopicAcl=${MQTT_ENFORCE_TOPIC_ACL:-true}
       - MqttSettings__DeviceTopicPrefix=${MQTT_DEVICE_TOPIC_PREFIX:-devices}
+      - MqttSettings__EnableZigbee2MqttBridge=${ZIGBEE2MQTT_ENABLED:-false}
+      - MqttSettings__Zigbee2MqttTopicPrefix=${ZIGBEE2MQTT_TOPIC_PREFIX:-zigbee2mqtt}
       - Provisioning__SharedKey=${PROVISIONING_SHARED_KEY}
       - Provisioning__ClaimCodeMinutes=10
       - EmailSettings__Enabled=${EMAIL_ENABLED:-false}
@@ -54,4 +56,34 @@ services:
       - redis
     ports:
       - "6379:6379"
+    restart: unless-stopped
+
+  # ── Zigbee2MQTT ─────────────────────────────────────────────────────────────
+  # Enable this service (profile: zigbee) when a Zigbee USB coordinator is
+  # connected to the host (e.g. /dev/ttyUSB0 for a CC2652-based dongle).
+  #
+  # Required environment variables (set in .env or override):
+  #   ZIGBEE2MQTT_SERIAL_PORT   – host path to the coordinator (e.g. /dev/ttyUSB0)
+  #   MQTT_ADMIN_USERNAME       – must match MqttSettings:Username in the app
+  #   MQTT_ADMIN_PASSWORD       – must match MqttSettings:Password in the app
+  #
+  # After starting with `docker compose --profile zigbee up`, also set:
+  #   MqttSettings__EnableZigbee2MqttBridge=true  (ZIGBEE2MQTT_ENABLED=true)
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt:latest
+    container_name: aeroponiciot-zigbee2mqtt
+    profiles:
+      - zigbee
+    depends_on:
+      - app
+    volumes:
+      - ./zigbee2mqtt-data:/app/data
+    devices:
+      - ${ZIGBEE2MQTT_SERIAL_PORT:-/dev/ttyUSB0}:${ZIGBEE2MQTT_SERIAL_PORT:-/dev/ttyUSB0}
+    environment:
+      - ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://app:1883
+      - ZIGBEE2MQTT_CONFIG_MQTT_USER=${MQTT_ADMIN_USERNAME:-}
+      - ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD=${MQTT_ADMIN_PASSWORD:-}
+      - ZIGBEE2MQTT_CONFIG_SERIAL_PORT=${ZIGBEE2MQTT_SERIAL_PORT:-/dev/ttyUSB0}
+      - ZIGBEE2MQTT_CONFIG_PERMIT_JOIN=false
     restart: unless-stopped

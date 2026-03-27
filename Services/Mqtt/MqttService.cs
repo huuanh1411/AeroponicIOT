@@ -1,6 +1,9 @@
+using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
+using AeroponicIOT.Models;
 using AeroponicIOT.Options;
 using AeroponicIOT.Services.Sensors;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Adapter;
@@ -247,6 +250,23 @@ public class MqttService : IMqttService, IDisposable
                 return;
             }
 
+            // ── Zigbee2MQTT bridge topics ─────────────────────────────────
+            if (_mqttOptions.EnableZigbee2MqttBridge)
+            {
+                var zigbeePrefix = _mqttOptions.Zigbee2MqttTopicPrefix.Trim().Trim('/');
+                if (topic.StartsWith($"{zigbeePrefix}/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var zigbeePayloadBytes = args.ApplicationMessage.PayloadSegment;
+                    if (zigbeePayloadBytes.Count > 0)
+                    {
+                        var zigbeeJson = Encoding.UTF8.GetString(zigbeePayloadBytes);
+                        await HandleZigbee2MqttMessageAsync(topic, zigbeePrefix, zigbeeJson);
+                    }
+                    return;
+                }
+            }
+
+            // ── Existing WiFi device sensor messages ──────────────────────
             // Expect sensor messages on: devices/{macAddress}/sensor
             var expectedPrefix = _mqttOptions.DeviceTopicPrefix.Trim().Trim('/');
             if (!topic.StartsWith($"{expectedPrefix}/", StringComparison.OrdinalIgnoreCase) ||
@@ -318,6 +338,132 @@ public class MqttService : IMqttService, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing MQTT sensor message");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Zigbee2MQTT helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Full Zigbee2MQTT message handler that receives the decoded JSON string.
+    /// Called from <see cref="OnInterceptingPublishAsync"/> once bytes are read.
+    /// </summary>
+    private async Task HandleZigbee2MqttMessageAsync(string topic, string zigbeePrefix, string json)
+    {
+        // ── Bridge lifecycle events ───────────────────────────────────────
+        if (topic.Equals($"{zigbeePrefix}/bridge/event", StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleZigbeeBridgeEventAsync(json);
+            return;
+        }
+
+        // Ignore other bridge/* management topics (state, log, devices, groups, …)
+        if (topic.StartsWith($"{zigbeePrefix}/bridge/", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // ── Device telemetry ─────────────────────────────────────────────
+        var segments = topic.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2)
+        {
+            return;
+        }
+
+        var friendlyName = segments[1];
+        var sensorData = ZigbeePayloadMapper.TryMap(friendlyName, json);
+        if (sensorData == null)
+        {
+            // Frame contains only link-quality / battery / availability – skip.
+            return;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var ingestionService = scope.ServiceProvider.GetRequiredService<ISensorIngestionService>();
+        await ingestionService.ProcessSensorDataAsync(sensorData, CancellationToken.None);
+
+        _logger.LogInformation(
+            "Sensor data ingested via Zigbee2MQTT for device {FriendlyName}", friendlyName);
+    }
+
+    /// <summary>
+    /// Auto-provisions a new Zigbee device as a <see cref="Device"/> record with
+    /// <c>ProtocolType = "zigbee"</c> and <c>Status = Pending</c> when it joins
+    /// the coordinator for the first time.  A user can then claim it from the
+    /// dashboard using the standard claim flow.
+    /// </summary>
+    private async Task HandleZigbeeBridgeEventAsync(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("type", out var typeProp))
+            {
+                return;
+            }
+
+            var eventType = typeProp.GetString();
+
+            // Act on first join and on successful interview (full device info available)
+            if (eventType is not ("device_joined" or "device_interview_successful"))
+            {
+                return;
+            }
+
+            if (!root.TryGetProperty("data", out var data))
+            {
+                return;
+            }
+
+            var friendlyName  = data.TryGetProperty("friendly_name",  out var fn)   ? fn.GetString()   : null;
+            var ieeeAddress   = data.TryGetProperty("ieee_address",   out var ieee) ? ieee.GetString()  : null;
+
+            // IEEE address is the canonical stable identifier; fall back to friendly name.
+            var identifier = ieeeAddress ?? friendlyName;
+            if (string.IsNullOrWhiteSpace(identifier))
+            {
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var existing = await context.Devices
+                .FirstOrDefaultAsync(d => d.MacAddress == identifier);
+
+            if (existing != null)
+            {
+                // Device already known – refresh last-seen timestamp.
+                existing.LastSeen = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+                return;
+            }
+
+            var device = new Device
+            {
+                DeviceName     = friendlyName ?? identifier,
+                MacAddress     = identifier,
+                ChipId         = ieeeAddress,
+                ProtocolType   = "zigbee",
+                Status         = DeviceStatusValues.Pending,
+                CreatedAt      = DateTime.UtcNow,
+                LastSeen       = DateTime.UtcNow,
+                ProvisionedAt  = DateTime.UtcNow,
+            };
+
+            context.Devices.Add(device);
+            await context.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Zigbee device auto-provisioned: {Identifier} (event: {EventType})",
+                identifier, eventType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to handle Zigbee2MQTT bridge event");
         }
     }
 

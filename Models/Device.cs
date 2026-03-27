@@ -59,6 +59,11 @@ public class Device
     [Column("claim_code_expires_at")]
     public DateTime? ClaimCodeExpiresAt { get; set; }
 
+    /// <summary>Communication protocol: "wifi" (default) or "zigbee".</summary>
+    [Column("protocol_type")]
+    [MaxLength(20)]
+    public string? ProtocolType { get; set; }
+
     // For backward compatibility
     [NotMapped]
     public string Name => DeviceName ?? "Unknown Device";

@@ -39,4 +39,17 @@ public class MqttSettingsOptions
     [Required]
     [MinLength(1)]
     public string DeviceTopicPrefix { get; set; } = "devices";
+
+    /// <summary>
+    /// Enable the Zigbee2MQTT bridge integration. When true the broker
+    /// subscribes to <see cref="Zigbee2MqttTopicPrefix"/>/ topics and
+    /// translates ZCL payloads into sensor readings.
+    /// </summary>
+    public bool EnableZigbee2MqttBridge { get; set; } = false;
+
+    /// <summary>
+    /// Root topic prefix that Zigbee2MQTT publishes to (default: "zigbee2mqtt").
+    /// </summary>
+    [MinLength(1)]
+    public string Zigbee2MqttTopicPrefix { get; set; } = "zigbee2mqtt";
 }
