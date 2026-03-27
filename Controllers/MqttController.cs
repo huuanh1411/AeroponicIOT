@@ -39,7 +39,13 @@ public class MqttController : ControllerBase
             plaintextEndpointEnabled = !_mqttOptions.DisablePlaintextEndpoint,
             clientCertificateRequired = _mqttOptions.EnableTls && _mqttOptions.RequireClientCertificate,
             clientCertificateIssuerAllowlistCount = _mqttOptions.AllowedClientCertificateIssuers.Length,
-            clientCertificateThumbprintAllowlistCount = _mqttOptions.AllowedClientCertificateThumbprints.Length
+            clientCertificateThumbprintAllowlistCount = _mqttOptions.AllowedClientCertificateThumbprints.Length,
+            zigbee = new
+            {
+                enabled = _mqttOptions.EnableZigbee2MqttBridge,
+                bridgeReady = _mqttService.IsZigbeeBridgeReady,
+                bridgeStatus = _mqttService.ZigbeeBridgeReadinessMessage
+            }
         };
 
         return Ok(ApiResponse.Success(status, "MQTT status retrieved"));

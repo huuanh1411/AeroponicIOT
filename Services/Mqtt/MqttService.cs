@@ -30,10 +30,36 @@ public class MqttService : IMqttService, IDisposable
     private readonly ProvisioningOptions _provisioningOptions;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<string, string> _authorizedClientMacs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string> _authenticatedClientUsernames = new(StringComparer.OrdinalIgnoreCase);
     private MqttServer? _mqttServer;
     private bool _isRunning;
+    private volatile bool _zigbeeBridgeAuthenticatedSinceStartup;
 
     public bool IsRunning => _isRunning;
+
+    public bool IsZigbeeBridgeReady => !_mqttOptions.EnableZigbee2MqttBridge
+        || !_mqttOptions.EnforceZigbeeTopicAcl
+        || _zigbeeBridgeAuthenticatedSinceStartup;
+
+    public string ZigbeeBridgeReadinessMessage
+    {
+        get
+        {
+            if (!_mqttOptions.EnableZigbee2MqttBridge)
+            {
+                return "Zigbee bridge integration is disabled";
+            }
+
+            if (!_mqttOptions.EnforceZigbeeTopicAcl)
+            {
+                return "Zigbee bridge ACL is disabled";
+            }
+
+            return _zigbeeBridgeAuthenticatedSinceStartup
+                ? "Configured Zigbee bridge identity has authenticated"
+                : "Waiting for configured Zigbee bridge identity to authenticate";
+        }
+    }
 
     public MqttService(
         ILogger<MqttService> logger,
@@ -103,6 +129,7 @@ public class MqttService : IMqttService, IDisposable
             {
                 _logger.LogInformation("MQTT Client disconnected: {ClientId}", e.ClientId);
                 _authorizedClientMacs.TryRemove(e.ClientId, out _);
+                _authenticatedClientUsernames.TryRemove(e.ClientId, out _);
                 await Task.CompletedTask;
             };
 
@@ -123,6 +150,8 @@ public class MqttService : IMqttService, IDisposable
                         && e.UserName == mqttUser
                         && e.Password == mqttPassword)
                     {
+                        _authenticatedClientUsernames[e.ClientId] = e.UserName;
+                        TrackZigbeeBridgeAuthentication(e.ClientId, e.UserName);
                         e.ReasonCode = MqttConnectReasonCode.Success;
                         await Task.CompletedTask;
                         return;
@@ -149,6 +178,8 @@ public class MqttService : IMqttService, IDisposable
                     }
 
                     _authorizedClientMacs[e.ClientId] = normalizedMac;
+                    _authenticatedClientUsernames[e.ClientId] = e.UserName;
+                    TrackZigbeeBridgeAuthentication(e.ClientId, e.UserName);
                     e.ReasonCode = MqttConnectReasonCode.Success;
                     await Task.CompletedTask;
                 };
@@ -256,6 +287,16 @@ public class MqttService : IMqttService, IDisposable
                 var zigbeePrefix = _mqttOptions.Zigbee2MqttTopicPrefix.Trim().Trim('/');
                 if (topic.StartsWith($"{zigbeePrefix}/", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (!IsAuthorizedZigbeePublisher(args.ClientId))
+                    {
+                        args.ProcessPublish = false;
+                        _logger.LogWarning(
+                            "MQTT Zigbee publish denied by ACL. ClientId={ClientId}, Topic={Topic}",
+                            args.ClientId,
+                            topic);
+                        return;
+                    }
+
                     var zigbeePayloadBytes = args.ApplicationMessage.PayloadSegment;
                     if (zigbeePayloadBytes.Count > 0)
                     {
@@ -372,10 +413,22 @@ public class MqttService : IMqttService, IDisposable
         }
 
         var friendlyName = segments[1];
-        var sensorData = ZigbeePayloadMapper.TryMap(friendlyName, json);
+        var sensorData = ZigbeePayloadMapper.TryMap(friendlyName, json, out var unknownKeys);
+        if (unknownKeys.Length > 0)
+        {
+            _logger.LogDebug(
+                "Zigbee payload contained unmapped keys. FriendlyName={FriendlyName}, Keys={Keys}",
+                friendlyName,
+                string.Join(",", unknownKeys));
+        }
+
         if (sensorData == null)
         {
-            // Frame contains only link-quality / battery / availability – skip.
+            // Frame contains no supported telemetry fields. Usually metadata-only updates.
+            _logger.LogDebug(
+                "Zigbee payload skipped because no supported sensor fields were found. FriendlyName={FriendlyName}, Topic={Topic}",
+                friendlyName,
+                topic);
             return;
         }
 
@@ -384,7 +437,9 @@ public class MqttService : IMqttService, IDisposable
         await ingestionService.ProcessSensorDataAsync(sensorData, CancellationToken.None);
 
         _logger.LogInformation(
-            "Sensor data ingested via Zigbee2MQTT for device {FriendlyName}", friendlyName);
+            "Sensor data ingested via Zigbee2MQTT for device. FriendlyName={FriendlyName}, Identifier={Identifier}",
+            friendlyName,
+            sensorData.MacAddress);
     }
 
     /// <summary>
@@ -433,7 +488,15 @@ public class MqttService : IMqttService, IDisposable
 
             var normalizedLookup = identifier.Trim().ToUpperInvariant();
             var existing = await context.Devices
-                .FirstOrDefaultAsync(d => d.MacAddress == normalizedLookup);
+                .FirstOrDefaultAsync(d => d.MacAddress == normalizedLookup && d.ProtocolType == "zigbee");
+
+            // Backward-compatible duplicate guard for records created before
+            // uppercase normalization or protocol tagging.
+            existing ??= await context.Devices
+                .FirstOrDefaultAsync(d =>
+                    d.MacAddress != null &&
+                    d.MacAddress.ToUpper() == normalizedLookup &&
+                    (d.ProtocolType == null || d.ProtocolType == "zigbee"));
 
             if (existing != null)
             {
@@ -469,6 +532,72 @@ public class MqttService : IMqttService, IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to handle Zigbee2MQTT bridge event");
+        }
+    }
+
+    private bool IsAuthorizedZigbeePublisher(string? clientId)
+    {
+        if (!_mqttOptions.EnableZigbee2MqttBridge || !_mqttOptions.EnforceZigbeeTopicAcl)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return false;
+        }
+
+        if (string.Equals(clientId, "ServerPublisher", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var configuredClientId = _mqttOptions.ZigbeeBridgeClientId?.Trim();
+        if (!string.IsNullOrWhiteSpace(configuredClientId) &&
+            string.Equals(clientId, configuredClientId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var configuredUsername = _mqttOptions.ZigbeeBridgeUsername?.Trim();
+        if (!string.IsNullOrWhiteSpace(configuredUsername) &&
+            _authenticatedClientUsernames.TryGetValue(clientId, out var authenticatedUsername) &&
+            string.Equals(authenticatedUsername, configuredUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private void TrackZigbeeBridgeAuthentication(string? clientId, string? username)
+    {
+        if (_zigbeeBridgeAuthenticatedSinceStartup)
+        {
+            return;
+        }
+
+        if (!_mqttOptions.EnableZigbee2MqttBridge || !_mqttOptions.EnforceZigbeeTopicAcl)
+        {
+            _zigbeeBridgeAuthenticatedSinceStartup = true;
+            return;
+        }
+
+        var configuredClientId = _mqttOptions.ZigbeeBridgeClientId?.Trim();
+        if (!string.IsNullOrWhiteSpace(configuredClientId) &&
+            !string.IsNullOrWhiteSpace(clientId) &&
+            string.Equals(clientId, configuredClientId, StringComparison.OrdinalIgnoreCase))
+        {
+            _zigbeeBridgeAuthenticatedSinceStartup = true;
+            return;
+        }
+
+        var configuredUsername = _mqttOptions.ZigbeeBridgeUsername?.Trim();
+        if (!string.IsNullOrWhiteSpace(configuredUsername) &&
+            !string.IsNullOrWhiteSpace(username) &&
+            string.Equals(username, configuredUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            _zigbeeBridgeAuthenticatedSinceStartup = true;
         }
     }
 

@@ -52,4 +52,19 @@ public class MqttSettingsOptions
     /// </summary>
     [MinLength(1)]
     public string Zigbee2MqttTopicPrefix { get; set; } = "zigbee2mqtt";
+
+    /// <summary>
+    /// Whether to enforce ACL checks on Zigbee2MQTT topics.
+    /// </summary>
+    public bool EnforceZigbeeTopicAcl { get; set; } = true;
+
+    /// <summary>
+    /// Optional bridge MQTT username allowed to publish to Zigbee topics.
+    /// </summary>
+    public string? ZigbeeBridgeUsername { get; set; }
+
+    /// <summary>
+    /// Optional bridge MQTT client id allowed to publish to Zigbee topics.
+    /// </summary>
+    public string? ZigbeeBridgeClientId { get; set; }
 }

@@ -40,6 +40,11 @@ builder.Services.AddOptions<MqttSettingsOptions>()
     .Validate(o => !o.EnableTls || !string.IsNullOrWhiteSpace(o.ServerCertificatePath), "MqttSettings:ServerCertificatePath is required when TLS is enabled")
     .Validate(o => !o.RequireClientCertificate || o.EnableTls, "MqttSettings:EnableTls must be true when RequireClientCertificate is enabled")
     .Validate(
+        o => !o.EnableZigbee2MqttBridge || !o.EnforceZigbeeTopicAcl ||
+             !string.IsNullOrWhiteSpace(o.ZigbeeBridgeUsername) ||
+             !string.IsNullOrWhiteSpace(o.ZigbeeBridgeClientId),
+        "MqttSettings:ZigbeeBridgeUsername or MqttSettings:ZigbeeBridgeClientId must be configured when Zigbee bridge ACL is enabled")
+    .Validate(
         o => !o.RequireClientCertificate ||
              (o.AllowedClientCertificateIssuers.Length > 0 || o.AllowedClientCertificateThumbprints.Length > 0),
         "MqttSettings:AllowedClientCertificateIssuers or MqttSettings:AllowedClientCertificateThumbprints must be configured when client certificates are required")

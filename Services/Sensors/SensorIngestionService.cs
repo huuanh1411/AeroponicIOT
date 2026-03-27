@@ -36,6 +36,8 @@ public class SensorIngestionService : ISensorIngestionService
 
         var normalizedMac = sensorData.MacAddress.Trim().ToUpperInvariant();
 
+        SanitizeOutOfRangeValues(sensorData, normalizedMac);
+
         // Find device by MAC address
         var device = await _context.Devices
             .Include(d => d.Crop)
@@ -76,6 +78,39 @@ public class SensorIngestionService : ISensorIngestionService
 
         _logger.LogInformation("Sensor data ingested for device {DeviceName} ({MacAddress})",
             device.Name ?? "Unknown", device.MacAddress ?? "Unknown");
+    }
+
+    private void SanitizeOutOfRangeValues(SensorDataDto sensorData, string normalizedMac)
+    {
+        if (sensorData.Ph is < 0 or > 14)
+        {
+            _logger.LogWarning("Discarded out-of-range pH value {Value} for device {MacAddress}", sensorData.Ph, normalizedMac);
+            sensorData.Ph = null;
+        }
+
+        if (sensorData.Tds is < 0 or > 50000)
+        {
+            _logger.LogWarning("Discarded out-of-range TDS value {Value} for device {MacAddress}", sensorData.Tds, normalizedMac);
+            sensorData.Tds = null;
+        }
+
+        if (sensorData.WaterTemperature is < -20 or > 100)
+        {
+            _logger.LogWarning("Discarded out-of-range water temperature {Value} for device {MacAddress}", sensorData.WaterTemperature, normalizedMac);
+            sensorData.WaterTemperature = null;
+        }
+
+        if (sensorData.AirHumidity is < 0 or > 100)
+        {
+            _logger.LogWarning("Discarded out-of-range humidity value {Value} for device {MacAddress}", sensorData.AirHumidity, normalizedMac);
+            sensorData.AirHumidity = null;
+        }
+
+        if (sensorData.LightIntensity is < 0 or > 200000)
+        {
+            _logger.LogWarning("Discarded out-of-range light intensity {Value} for device {MacAddress}", sensorData.LightIntensity, normalizedMac);
+            sensorData.LightIntensity = null;
+        }
     }
 
     private async Task CheckThresholdsAndNotifyAsync(Device device, SensorLog sensorLog, CancellationToken cancellationToken)

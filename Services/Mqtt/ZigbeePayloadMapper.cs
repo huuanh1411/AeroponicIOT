@@ -25,6 +25,22 @@ namespace AeroponicIOT.Services.Mqtt;
 /// </summary>
 internal static class ZigbeePayloadMapper
 {
+    private static readonly HashSet<string> KnownMetadataFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ieee_address",
+        "friendly_name",
+        "linkquality",
+        "battery",
+        "battery_low",
+        "voltage",
+        "last_seen",
+        "device_temperature",
+        "power_outage_count",
+        "action",
+        "state",
+        "update"
+    };
+
     // Maps every known ZCL / Zigbee2MQTT field name to the corresponding
     // SensorDataDto property setter.
     // NOTE: illuminance (raw 16-bit integer) is intentionally kept separate
@@ -70,8 +86,10 @@ internal static class ZigbeePayloadMapper
     /// A populated <see cref="SensorDataDto"/> when at least one known sensor
     /// field was present; <c>null</c> otherwise (e.g. link-quality-only frames).
     /// </returns>
-    public static SensorDataDto? TryMap(string friendlyName, string json)
+    public static SensorDataDto? TryMap(string friendlyName, string json, out string[] unknownKeys)
     {
+        unknownKeys = Array.Empty<string>();
+
         JsonDocument doc;
         try
         {
@@ -88,6 +106,7 @@ internal static class ZigbeePayloadMapper
             var matched = false;
             bool luxAlreadySet = false;
             string? rawIlluminanceJson = null; // defer raw illuminance
+            var unmapped = new List<string>();
 
             foreach (var property in doc.RootElement.EnumerateObject())
             {
@@ -121,6 +140,12 @@ internal static class ZigbeePayloadMapper
                     {
                         luxAlreadySet = true;
                     }
+                    continue;
+                }
+
+                if (!KnownMetadataFields.Contains(property.Name))
+                {
+                    unmapped.Add(property.Name);
                 }
             }
 
@@ -131,6 +156,10 @@ internal static class ZigbeePayloadMapper
                 dto.LightIntensity = GetDouble(rawEl.RootElement);
                 matched = true;
             }
+
+            unknownKeys = unmapped
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
             return matched ? dto : null;
         }

@@ -35,6 +35,9 @@ services:
       - MqttSettings__DeviceTopicPrefix=${MQTT_DEVICE_TOPIC_PREFIX:-devices}
       - MqttSettings__EnableZigbee2MqttBridge=${ZIGBEE2MQTT_ENABLED:-false}
       - MqttSettings__Zigbee2MqttTopicPrefix=${ZIGBEE2MQTT_TOPIC_PREFIX:-zigbee2mqtt}
+      - MqttSettings__EnforceZigbeeTopicAcl=${ZIGBEE2MQTT_ENFORCE_TOPIC_ACL:-true}
+      - MqttSettings__ZigbeeBridgeUsername=${ZIGBEE2MQTT_BRIDGE_USERNAME:-}
+      - MqttSettings__ZigbeeBridgeClientId=${ZIGBEE2MQTT_BRIDGE_CLIENT_ID:-}
       - Provisioning__SharedKey=${PROVISIONING_SHARED_KEY}
       - Provisioning__ClaimCodeMinutes=10
       - EmailSettings__Enabled=${EMAIL_ENABLED:-false}
@@ -84,6 +87,7 @@ services:
       - ZIGBEE2MQTT_CONFIG_MQTT_SERVER=mqtt://app:1883
       - ZIGBEE2MQTT_CONFIG_MQTT_USER=${MQTT_ADMIN_USERNAME:-}
       - ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD=${MQTT_ADMIN_PASSWORD:-}
+      - ZIGBEE2MQTT_CONFIG_MQTT_CLIENT_ID=${ZIGBEE2MQTT_BRIDGE_CLIENT_ID:-zigbee2mqtt-bridge}
       - ZIGBEE2MQTT_CONFIG_SERIAL_PORT=${ZIGBEE2MQTT_SERIAL_PORT:-/dev/ttyUSB0}
       - ZIGBEE2MQTT_CONFIG_PERMIT_JOIN=false
       # Include ieee_address in every telemetry payload so the backend can use

@@ -24,4 +24,16 @@ public interface IMqttService
     /// Check if the broker is running
     /// </summary>
     bool IsRunning { get; }
+
+    /// <summary>
+    /// Indicates whether Zigbee bridge readiness requirements are satisfied.
+    /// Returns true when Zigbee bridging is disabled, ACL is disabled, or the
+    /// configured bridge identity has authenticated at least once since startup.
+    /// </summary>
+    bool IsZigbeeBridgeReady { get; }
+
+    /// <summary>
+    /// Provides a human-readable readiness status for Zigbee bridge integration.
+    /// </summary>
+    string ZigbeeBridgeReadinessMessage { get; }
 }
