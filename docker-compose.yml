@@ -86,4 +86,8 @@ services:
       - ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD=${MQTT_ADMIN_PASSWORD:-}
       - ZIGBEE2MQTT_CONFIG_SERIAL_PORT=${ZIGBEE2MQTT_SERIAL_PORT:-/dev/ttyUSB0}
       - ZIGBEE2MQTT_CONFIG_PERMIT_JOIN=false
+      # Include ieee_address in every telemetry payload so the backend can use
+      # the stable hardware EUI-64 as the device identifier instead of the
+      # user-editable friendly name.
+      - ZIGBEE2MQTT_CONFIG_ADVANCED_INCLUDE_DEVICE_INFORMATION=true
     restart: unless-stopped

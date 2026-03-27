@@ -92,7 +92,8 @@ public class DeviceController : ControllerBase
                 GardenId = d.GardenId,
                 GardenName = d.Garden?.Name,
                 CreatedAt = d.CreatedAt,
-                LastSeen = d.LastSeen
+                LastSeen = d.LastSeen,
+                ProtocolType = d.ProtocolType
             }).ToList();
 
             _logger.LogInformation("User {UserId} retrieved {Count} devices", userId, deviceDtos.Count);
@@ -128,7 +129,8 @@ public class DeviceController : ControllerBase
                     ChipId = d.ChipId,
                     FirmwareVersion = d.FirmwareVersion,
                     LastSeen = d.LastSeen,
-                    ProvisionedAt = d.ProvisionedAt
+                    ProvisionedAt = d.ProvisionedAt,
+                    ProtocolType = d.ProtocolType
                 })
                 .ToListAsync();
 
@@ -393,7 +395,8 @@ public class DeviceController : ControllerBase
                 GardenId = device.GardenId,
                 GardenName = device.Garden?.Name,
                 CreatedAt = device.CreatedAt,
-                LastSeen = device.LastSeen
+                LastSeen = device.LastSeen,
+                ProtocolType = device.ProtocolType
             };
 
             return Ok(ApiResponse.Success(deviceDto, "Device retrieved"));
@@ -475,7 +478,8 @@ public class DeviceController : ControllerBase
                 CropAssignedAt = device.CropAssignedAt,
                 GardenId = device.GardenId,
                 CreatedAt = device.CreatedAt,
-                LastSeen = device.LastSeen
+                LastSeen = device.LastSeen,
+                ProtocolType = device.ProtocolType
             };
 
             return CreatedAtAction(nameof(GetDeviceById), new { id = device.Id }, ApiResponse.Success(deviceDto, "Device created"));
@@ -583,7 +587,8 @@ public class DeviceController : ControllerBase
                 GardenId = device.GardenId,
                 GardenName = device.Garden?.Name,
                 CreatedAt = device.CreatedAt,
-                LastSeen = device.LastSeen
+                LastSeen = device.LastSeen,
+                ProtocolType = device.ProtocolType
             };
 
             return Ok(ApiResponse.Success(deviceDto, "Device updated"));

@@ -16,6 +16,8 @@ public class DeviceDto
     public DateTime? CreatedAt { get; set; }
     public DateTime? LastSeen { get; set; }
     public bool IsActive { get; set; }
+    /// <summary>Communication protocol: null / "wifi" for ESP32 nodes, "zigbee" for Zigbee2MQTT devices.</summary>
+    public string? ProtocolType { get; set; }
 }
 
 public class CreateDeviceDto
@@ -102,4 +104,5 @@ public class PendingDeviceDto
     public string? FirmwareVersion { get; set; }
     public DateTime? LastSeen { get; set; }
     public DateTime? ProvisionedAt { get; set; }
+    public string? ProtocolType { get; set; }
 }

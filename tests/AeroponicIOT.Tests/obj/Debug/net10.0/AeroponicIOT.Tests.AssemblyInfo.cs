@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AeroponicIOT.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+22ee834743f96acfcf130ab52436258e267e9221")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e982dc7559b1823fc12f4dd81ebd7b14b1af4613")]
 [assembly: System.Reflection.AssemblyProductAttribute("AeroponicIOT.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AeroponicIOT.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

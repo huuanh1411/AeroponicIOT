@@ -431,8 +431,9 @@ public class MqttService : IMqttService, IDisposable
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
+            var normalizedLookup = identifier.Trim().ToUpperInvariant();
             var existing = await context.Devices
-                .FirstOrDefaultAsync(d => d.MacAddress == identifier);
+                .FirstOrDefaultAsync(d => d.MacAddress == normalizedLookup);
 
             if (existing != null)
             {
@@ -442,11 +443,15 @@ public class MqttService : IMqttService, IDisposable
                 return;
             }
 
+            // Normalize to uppercase: SensorIngestionService uppercases
+            // the MacAddress before lookup, so the stored value must match.
+            var normalizedIdentifier = identifier.Trim().ToUpperInvariant();
+
             var device = new Device
             {
-                DeviceName     = friendlyName ?? identifier,
-                MacAddress     = identifier,
-                ChipId         = ieeeAddress,
+                DeviceName     = friendlyName ?? normalizedIdentifier,
+                MacAddress     = normalizedIdentifier,
+                ChipId         = ieeeAddress?.Trim().ToUpperInvariant(),
                 ProtocolType   = "zigbee",
                 Status         = DeviceStatusValues.Pending,
                 CreatedAt      = DateTime.UtcNow,
