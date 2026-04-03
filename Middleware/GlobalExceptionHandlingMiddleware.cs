@@ -10,6 +10,12 @@ public class GlobalExceptionHandlingMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<GlobalExceptionHandlingMiddleware> _logger;
 
+    private static readonly Action<ILogger, string, string, Exception> LogUnhandledException =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Error,
+            new EventId(1, "UnhandledException"),
+            "Unhandled exception for {Method} {Path}");
+
     public GlobalExceptionHandlingMiddleware(RequestDelegate next, ILogger<GlobalExceptionHandlingMiddleware> logger)
     {
         _next = next;
@@ -42,7 +48,10 @@ public class GlobalExceptionHandlingMiddleware
             _ => (StatusCodes.Status500InternalServerError, "Internal Server Error", "An unexpected error occurred", "internal_error", LogLevel.Error)
         };
 
-        _logger.Log(logLevel, exception, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
+        if (_logger.IsEnabled(logLevel))
+        {
+            LogUnhandledException(_logger, context.Request.Method, context.Request.Path.ToString(), exception);
+        }
 
         if (context.Response.HasStarted)
         {

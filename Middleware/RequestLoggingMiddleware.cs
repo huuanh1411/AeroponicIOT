@@ -69,7 +69,7 @@ public partial class RequestLoggingMiddleware
                 LogHttpRequest(_logger,
                     logLevel,
                     context.Request.Method,
-                    path,
+                    path.ToString(),
                     statusCode,
                     elapsedMs,
                     correlationId,

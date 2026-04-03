@@ -8,7 +8,7 @@ public interface IEmailService
     /// <summary>
     /// Send an email
     /// </summary>
-    Task<bool> SendEmailAsync(string to, string subject, string htmlBody, string? plainTextBody = null);
+    Task<bool> SendEmailAsync(string recipient, string subject, string htmlBody, string? plainTextBody = null);
 
     /// <summary>
     /// Send an email to multiple recipients

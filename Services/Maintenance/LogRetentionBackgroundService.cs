@@ -12,6 +12,15 @@ public class LogRetentionBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
 
+    private static readonly Action<ILogger, Exception?> LogErrorCleanupFailed =
+        LoggerMessage.Define(LogLevel.Error, new EventId(1, nameof(LogRetentionBackgroundService)), "Error during log retention cleanup.");
+
+    private static readonly Action<ILogger, int, DateTime, Exception?> LogInfoSensorLogsDeleted =
+        LoggerMessage.Define<int, DateTime>(LogLevel.Information, new EventId(2, nameof(RunCleanupAsync)), "Deleted {Count} sensor log rows older than {Cutoff}");
+
+    private static readonly Action<ILogger, int, DateTime, Exception?> LogInfoActuatorLogsDeleted =
+        LoggerMessage.Define<int, DateTime>(LogLevel.Information, new EventId(3, nameof(RunCleanupAsync)), "Deleted {Count} actuator log rows older than {Cutoff}");
+
     public LogRetentionBackgroundService(
         ILogger<LogRetentionBackgroundService> logger,
         IServiceScopeFactory scopeFactory,
@@ -39,7 +48,7 @@ public class LogRetentionBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during log retention cleanup.");
+                LogErrorCleanupFailed(_logger, ex);
             }
 
             // Run once per day
@@ -66,7 +75,7 @@ public class LogRetentionBackgroundService : BackgroundService
 
             if (deleted > 0)
             {
-                _logger.LogInformation("Deleted {Count} sensor log rows older than {Cutoff}", deleted, sensorCutoff);
+                LogInfoSensorLogsDeleted(_logger, deleted, sensorCutoff, null);
             }
         }
 
@@ -79,7 +88,7 @@ public class LogRetentionBackgroundService : BackgroundService
 
             if (deleted > 0)
             {
-                _logger.LogInformation("Deleted {Count} actuator log rows older than {Cutoff}", deleted, actuatorCutoff);
+                LogInfoActuatorLogsDeleted(_logger, deleted, actuatorCutoff, null);
             }
         }
     }

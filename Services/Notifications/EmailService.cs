@@ -20,6 +20,42 @@ public class EmailService : IEmailService
     private readonly string? _fromEmail;
     private readonly string? _fromName;
 
+    private static readonly Action<ILogger, Exception?> LogInfoServiceDisabled =
+        LoggerMessage.Define(LogLevel.Information, new EventId(1, nameof(EmailService)), "Email service is disabled via EmailSettings:Enabled");
+
+    private static readonly Action<ILogger, string?, int, Exception?> LogInfoServiceConfigured =
+        LoggerMessage.Define<string?, int>(LogLevel.Information, new EventId(2, nameof(EmailService)), "Email service configured with SMTP host: {Host}:{Port}");
+
+    private static readonly Action<ILogger, Exception?> LogWarningServiceMisconfigured =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(3, nameof(EmailService)), "Email service not configured. Please set EmailSettings in appsettings.json");
+
+    private static readonly Action<ILogger, string, Exception?> LogWarningSkippingEmailToRecipient =
+        LoggerMessage.Define<string>(LogLevel.Warning, new EventId(4, nameof(SendEmailAsync)), "Email service not configured, skipping email to {To}");
+
+    private static readonly Action<ILogger, string, string, Exception?> LogInfoEmailSent =
+        LoggerMessage.Define<string, string>(LogLevel.Information, new EventId(5, nameof(SendEmailAsync)), "Email sent successfully to {To} with subject: {Subject}");
+
+    private static readonly Action<ILogger, string, Exception?> LogErrorSendingEmailToRecipient =
+        LoggerMessage.Define<string>(LogLevel.Error, new EventId(6, nameof(SendEmailAsync)), "Error sending email to {To}");
+
+    private static readonly Action<ILogger, Exception?> LogWarningSkippingBulkEmail =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(7, nameof(SendBulkEmailAsync)), "Email service not configured, skipping bulk email");
+
+    private static readonly Action<ILogger, string, Exception?> LogInfoBulkEmailRecipientSent =
+        LoggerMessage.Define<string>(LogLevel.Information, new EventId(8, nameof(SendBulkEmailAsync)), "Email sent to {Recipient}");
+
+    private static readonly Action<ILogger, string, Exception?> LogErrorBulkEmailRecipientFailed =
+        LoggerMessage.Define<string>(LogLevel.Error, new EventId(9, nameof(SendBulkEmailAsync)), "Error sending email to {Recipient}");
+
+    private static readonly Action<ILogger, int, Exception?> LogInfoBulkEmailCompleted =
+        LoggerMessage.Define<int>(LogLevel.Information, new EventId(10, nameof(SendBulkEmailAsync)), "Bulk email sent to {Count} recipients");
+
+    private static readonly Action<ILogger, Exception?> LogErrorBulkEmailOperationFailed =
+        LoggerMessage.Define(LogLevel.Error, new EventId(11, nameof(SendBulkEmailAsync)), "Error in bulk email operation");
+
+    private static readonly Action<ILogger, string?, int, Exception?> LogErrorHealthCheckFailed =
+        LoggerMessage.Define<string?, int>(LogLevel.Error, new EventId(12, nameof(CheckHealthAsync)), "Email health check failed for SMTP host {Host}:{Port}");
+
     public bool IsConfigured => _enabled && !string.IsNullOrEmpty(_smtpHost) && !string.IsNullOrEmpty(_fromEmail);
 
     public EmailService(IOptions<EmailSettingsOptions> emailOptions, ILogger<EmailService> logger)
@@ -37,15 +73,15 @@ public class EmailService : IEmailService
 
         if (!_enabled)
         {
-            _logger.LogInformation("Email service is disabled via EmailSettings:Enabled");
+            LogInfoServiceDisabled(_logger, null);
         }
         else if (IsConfigured)
         {
-            _logger.LogInformation("Email service configured with SMTP host: {Host}:{Port}", _smtpHost, _smtpPort);
+            LogInfoServiceConfigured(_logger, _smtpHost, _smtpPort, null);
         }
         else
         {
-            _logger.LogWarning("Email service not configured. Please set EmailSettings in appsettings.json");
+            LogWarningServiceMisconfigured(_logger, null);
         }
     }
 
@@ -55,7 +91,7 @@ public class EmailService : IEmailService
         {
             if (!IsConfigured)
             {
-                _logger.LogWarning("Email service not configured, skipping email to {To}", to);
+                LogWarningSkippingEmailToRecipient(_logger, to, null);
                 return false;
             }
 
@@ -87,12 +123,12 @@ public class EmailService : IEmailService
                 await client.DisconnectAsync(true);
             }
 
-            _logger.LogInformation("Email sent successfully to {To} with subject: {Subject}", to, subject);
+            LogInfoEmailSent(_logger, to, subject, null);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending email to {To}", to);
+            LogErrorSendingEmailToRecipient(_logger, to, ex);
             return false;
         }
     }
@@ -103,7 +139,7 @@ public class EmailService : IEmailService
         {
             if (!IsConfigured)
             {
-                _logger.LogWarning("Email service not configured, skipping bulk email");
+                LogWarningSkippingBulkEmail(_logger, null);
                 return false;
             }
 
@@ -136,23 +172,23 @@ public class EmailService : IEmailService
                         message.Body = bodyBuilder.ToMessageBody();
 
                         await client.SendAsync(message);
-                        _logger.LogInformation("Email sent to {Recipient}", recipient);
+                        LogInfoBulkEmailRecipientSent(_logger, recipient, null);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error sending email to {Recipient}", recipient);
+                        LogErrorBulkEmailRecipientFailed(_logger, recipient, ex);
                     }
                 }
 
                 await client.DisconnectAsync(true);
             }
 
-            _logger.LogInformation("Bulk email sent to {Count} recipients", recipients.Count);
+            LogInfoBulkEmailCompleted(_logger, recipients.Count, null);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in bulk email operation");
+            LogErrorBulkEmailOperationFailed(_logger, ex);
             return false;
         }
     }
@@ -236,7 +272,7 @@ public class EmailService : IEmailService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Email health check failed for SMTP host {Host}:{Port}", _smtpHost, _smtpPort);
+            LogErrorHealthCheckFailed(_logger, _smtpHost, _smtpPort, ex);
             return new EmailHealthCheckResult
             {
                 Enabled = true,
