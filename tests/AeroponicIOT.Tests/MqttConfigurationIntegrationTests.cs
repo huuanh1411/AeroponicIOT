@@ -16,9 +16,21 @@ public class MqttConfigurationIntegrationTests : IClassFixture<TestWebApplicatio
     }
 
     [Fact]
+    public async Task Status_WithoutAuthentication_ReturnsUnauthorized()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/mqtt/status");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Status_ReturnsHostAndPortFromConfiguration()
     {
         using var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-UserId", "1");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Farmer");
 
         var response = await client.GetAsync("/api/mqtt/status");
 

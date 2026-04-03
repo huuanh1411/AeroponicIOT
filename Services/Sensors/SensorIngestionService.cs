@@ -3,6 +3,7 @@ using AeroponicIOT.DTOs;
 using AeroponicIOT.Exceptions;
 using AeroponicIOT.Models;
 using AeroponicIOT.Services.Notifications;
+using AeroponicIOT.Services.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace AeroponicIOT.Services.Sensors;
@@ -34,7 +35,7 @@ public class SensorIngestionService : ISensorIngestionService
             throw new DomainValidationException("MAC address is required");
         }
 
-        var normalizedMac = sensorData.MacAddress.Trim().ToUpperInvariant();
+        var normalizedMac = DeviceIdentityNormalizer.NormalizeMac(sensorData.MacAddress);
 
         SanitizeOutOfRangeValues(sensorData, normalizedMac);
 
@@ -72,9 +73,33 @@ public class SensorIngestionService : ISensorIngestionService
 
         _context.SensorLogs.Add(sensorLog);
 
-        await CheckThresholdsAndNotifyAsync(device, sensorLog, cancellationToken);
+        var alerts = CheckThresholds(device, sensorLog);
+        if (alerts.Count > 0)
+        {
+            _context.Alerts.AddRange(alerts);
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        foreach (var alert in alerts)
+        {
+            try
+            {
+                await _notificationService.SendAlertNotificationAsync(
+                    device.Id,
+                    alert.Message ?? "Alert",
+                    alert.Message ?? "An alert has been triggered",
+                    alert.Severity ?? "Medium");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to dispatch alert notification for device {DeviceId} alert {AlertId}",
+                    device.Id,
+                    alert.Id);
+            }
+        }
 
         _logger.LogInformation("Sensor data ingested for device {DeviceName} ({MacAddress})",
             device.Name ?? "Unknown", device.MacAddress ?? "Unknown");
@@ -113,17 +138,17 @@ public class SensorIngestionService : ISensorIngestionService
         }
     }
 
-    private async Task CheckThresholdsAndNotifyAsync(Device device, SensorLog sensorLog, CancellationToken cancellationToken)
+    private List<Alert> CheckThresholds(Device device, SensorLog sensorLog)
     {
         if (device.Crop == null)
         {
-            return;
+            return new List<Alert>();
         }
 
         var currentStage = GetCurrentCropStage(device);
         if (currentStage == null)
         {
-            return;
+            return new List<Alert>();
         }
 
         var alerts = new List<Alert>();
@@ -192,16 +217,7 @@ public class SensorIngestionService : ISensorIngestionService
             }
         }
 
-        foreach (var alert in alerts)
-        {
-            _context.Alerts.Add(alert);
-
-            await _notificationService.SendAlertNotificationAsync(
-                device.Id,
-                alert.Message ?? "Alert",
-                alert.Message ?? "An alert has been triggered",
-                alert.Severity ?? "Medium");
-        }
+        return alerts;
     }
 
     private CropStage? GetCurrentCropStage(Device device)

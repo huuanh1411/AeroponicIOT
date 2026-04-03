@@ -54,7 +54,7 @@ On startup, EF Core migrations are applied automatically if the database is avai
 | `/api/dashboard/history/{deviceId}` | GET | Get device sensor history |
 | `/api/actuator/control` | POST | Send control commands to devices |
 | `/api/actuator/logs/{deviceId}` | GET | Get actuator command logs |
-| `/api/mqtt/status` | GET | Check MQTT broker status |
+| `/api/mqtt/status` | GET | Check MQTT broker status (requires auth) |
 | `/api/mqtt/publish` | POST | Publish message to MQTT topic |
 
 ### HTTP Sensor Ingestion Authentication
@@ -152,6 +152,47 @@ Run with Redis via Docker Compose profile:
 REDIS_CONFIGURATION=redis:6379 docker compose --profile redis up --build
 ```
 
+## Startup Initialization Controls
+
+Database migration and crop seeding behavior can be tuned using the `Startup` section:
+
+- `Startup:ApplyMigrationsOnStartup` (default `true`)
+- `Startup:SeedDefaultCropsOnStartup` (default `true`)
+- `Startup:FailFastOnInitializationError` (default `false`, production default behavior is fail-fast when not explicitly configured)
+
+Example:
+
+```bash
+Startup__ApplyMigrationsOnStartup=true \
+Startup__SeedDefaultCropsOnStartup=true \
+Startup__FailFastOnInitializationError=true
+```
+
+## Production Configuration Linting
+
+The app validates critical configuration at startup (`ValidateOnStart`) and fails fast when required values are missing.
+
+Recommended production preflight checklist:
+
+1. `JwtSettings:SecretKey`
+  - Required and must be at least 32 characters.
+2. `Provisioning:SharedKey`
+  - Required and must be at least 8 characters.
+3. MQTT TLS choices
+  - If `MqttSettings:EnableTls=true`, then `MqttSettings:ServerCertificatePath` is required.
+  - If `MqttSettings:RequireClientCertificate=true`, configure at least one of:
+    - `MqttSettings:AllowedClientCertificateIssuers`
+    - `MqttSettings:AllowedClientCertificateThumbprints`
+
+Example production env var lint set:
+
+```bash
+JwtSettings__SecretKey=replace-with-strong-32-plus-char-secret \
+Provisioning__SharedKey=replace-with-device-onboarding-secret \
+MqttSettings__EnableTls=true \
+MqttSettings__ServerCertificatePath=/certs/mqtt-server.pfx
+```
+
 ## OpenTelemetry
 
 OpenTelemetry tracing and metrics are enabled with configurable sampling and path exclusions.
@@ -170,6 +211,42 @@ OpenTelemetry__ServiceName=AeroponicIOT \
 OpenTelemetry__Tracing__SampleRatio=0.25 \
 OpenTelemetry__Otlp__Endpoint=http://otel-collector:4317
 ```
+
+### Performance Budgets
+
+The API emits budget-focused metrics via meter `AeroponicIOT.PerformanceBudgets` for:
+
+- `GET /api/dashboard/latest` (`dashboard.latest`)
+- `POST /api/sensor` (`sensor.ingest`)
+
+Config keys:
+
+- `PerformanceBudgets:DashboardLatestP95Ms` (default `300`)
+- `PerformanceBudgets:SensorIngestP95Ms` (default `150`)
+
+When a request exceeds budget:
+
+- Histogram metric is recorded: `aeroponic.endpoint.duration.ms`
+- Violation counter increments: `aeroponic.endpoint.budget_violations`
+- A warning log entry is emitted with endpoint, duration, budget, and status code.
+
+### Dashboard Suggestions
+
+Build a Grafana dashboard with the following panels:
+
+Ready-to-import dashboard JSON: `docs/observability/grafana-aeroponiciot-performance.json`
+
+1. Endpoint p95 latency (5m)
+  - `histogram_quantile(0.95, sum(rate(aeroponic_endpoint_duration_ms_bucket[5m])) by (le, endpoint))`
+2. Budget violation rate (5m)
+  - `sum(rate(aeroponic_endpoint_budget_violations_total[5m])) by (endpoint)`
+3. Endpoint request volume (5m)
+  - `sum(rate(aeroponic_endpoint_duration_ms_count[5m])) by (endpoint, status_code)`
+
+Recommended alerting:
+
+- Page if p95 for `dashboard.latest` exceeds budget for 15 minutes.
+- Ticket if p95 for `sensor.ingest` exceeds budget for 10 minutes.
 
 ## MQTT Integration
 

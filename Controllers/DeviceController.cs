@@ -9,8 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
-using System.Security.Claims;
-
 namespace AeroponicIOT.Controllers;
 
 [ApiController]
@@ -22,34 +20,36 @@ public class DeviceController : ControllerBase
     private readonly ILogger<DeviceController> _logger;
     private readonly ProvisioningOptions _provisioningOptions;
     private readonly IOnboardingAttemptTracker _onboardingAttemptTracker;
+    private readonly ICurrentUserService _currentUserService;
 
     public DeviceController(
         ApplicationDbContext context,
         ILogger<DeviceController> logger,
         IOptions<ProvisioningOptions> provisioningOptions,
-        IOnboardingAttemptTracker onboardingAttemptTracker)
+        IOnboardingAttemptTracker onboardingAttemptTracker,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _logger = logger;
         _provisioningOptions = provisioningOptions.Value;
         _onboardingAttemptTracker = onboardingAttemptTracker;
+        _currentUserService = currentUserService;
     }
 
     private int GetCurrentUserId()
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value;
-        if (int.TryParse(userIdClaim, out var userId))
+        var user = _currentUserService.GetCurrentUser();
+        if (user.UserId.HasValue)
         {
-            return userId;
+            return user.UserId.Value;
         }
+
         throw new UnauthorizedAccessException("User ID not found in token");
     }
 
     private string? GetCurrentUserRole()
     {
-        return User.FindFirst(ClaimTypes.Role)?.Value
-            ?? User.FindFirst("role")?.Value;
+        return _currentUserService.GetCurrentUser().Role;
     }
 
     [HttpGet]
@@ -184,7 +184,7 @@ public class DeviceController : ControllerBase
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Invalid MAC address format");
             }
 
-            var normalizedMac = request.MacAddress.Trim().ToUpperInvariant();
+            var normalizedMac = DeviceIdentityNormalizer.NormalizeMac(request.MacAddress);
             var device = await _context.Devices.FirstOrDefaultAsync(d => d.MacAddress == normalizedMac);
 
             if (device == null)
@@ -420,9 +420,16 @@ public class DeviceController : ControllerBase
         {
             var userId = GetCurrentUserId();
 
+            if (!IsValidMacAddress(createDto.MacAddress))
+            {
+                return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Invalid MAC address format");
+            }
+
+            var normalizedMac = DeviceIdentityNormalizer.NormalizeMac(createDto.MacAddress);
+
             // Check if MAC address already exists
             var existingDevice = await _context.Devices
-                .FirstOrDefaultAsync(d => d.MacAddress == createDto.MacAddress);
+                .FirstOrDefaultAsync(d => d.MacAddress == normalizedMac);
 
             if (existingDevice != null)
             {
@@ -451,7 +458,7 @@ public class DeviceController : ControllerBase
             var device = new Device
             {
                 DeviceName = createDto.Name,
-                MacAddress = createDto.MacAddress.ToUpper(),
+                MacAddress = normalizedMac,
                 CurrentCropId = createDto.CurrentCropId,
                 CropAssignedAt = createDto.CurrentCropId.HasValue ? DateTime.UtcNow : null,
                 GardenId = createDto.GardenId,
@@ -666,7 +673,9 @@ public class DeviceController : ControllerBase
     private string BuildSelfRegisterAttemptKey(DeviceSelfRegisterRequestDto request)
     {
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var mac = request.MacAddress?.Trim().ToUpperInvariant() ?? "unknown";
+        var mac = DeviceIdentityNormalizer.TryNormalizeMac(request.MacAddress, out var normalizedMac)
+            ? normalizedMac
+            : "unknown";
         return $"self-register:{ip}:{mac}";
     }
 

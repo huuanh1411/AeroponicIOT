@@ -558,3 +558,15 @@ C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\obj\Release
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\obj\Release\net10.0\AeroponicIOT.Tests.pdb
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\obj\Release\net10.0\AeroponicIOT.Tests.genruntimeconfig.cache
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\obj\Release\net10.0\ref\AeroponicIOT.Tests.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\docs\observability\grafana-aeroponiciot-performance.json
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\Microsoft.Extensions.Caching.StackExchangeRedis.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.Api.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.Api.ProviderBuilderExtensions.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.Exporter.OpenTelemetryProtocol.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.Extensions.Hosting.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.Instrumentation.AspNetCore.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.Instrumentation.Http.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\OpenTelemetry.Instrumentation.Runtime.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\Pipelines.Sockets.Unofficial.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Release\net10.0\StackExchange.Redis.dll

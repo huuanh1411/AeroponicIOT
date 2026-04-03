@@ -1,6 +1,7 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,11 +15,16 @@ public class GardenController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<GardenController> _logger;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GardenController(ApplicationDbContext context, ILogger<GardenController> logger)
+    public GardenController(
+        ApplicationDbContext context,
+        ILogger<GardenController> logger,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet]
@@ -192,16 +198,15 @@ public class GardenController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Garden not found");
             }
 
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
             var devicesQuery = _context.Devices.Where(d => d.GardenId == id).Include(d => d.Crop).AsQueryable();
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt))
+                if (!currentUser.UserId.HasValue)
                     return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
 
-                devicesQuery = devicesQuery.Where(d => d.UserId == userIdInt);
+                devicesQuery = devicesQuery.Where(d => d.UserId == currentUser.UserId.Value);
             }
 
             var devices = await devicesQuery.ToListAsync();

@@ -110,4 +110,15 @@ public class SecurityAttributesTests
 
         Assert.NotNull(attribute);
     }
+
+    [Fact]
+    public void MqttController_RequiresFarmerOrAdminPolicy()
+    {
+        var attribute = typeof(MqttController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .SingleOrDefault(a => a.Policy == "FarmerOrAdmin");
+
+        Assert.NotNull(attribute);
+    }
 }

@@ -1,8 +1,8 @@
 using AeroponicIOT.Services.Notifications;
+using AeroponicIOT.Services.Security;
 using AeroponicIOT.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace AeroponicIOT.Controllers;
 
@@ -14,12 +14,18 @@ public class NotificationController : ControllerBase
     private readonly INotificationService _notificationService;
     private readonly IEmailService _emailService;
     private readonly ILogger<NotificationController> _logger;
+    private readonly ICurrentUserService _currentUserService;
 
-    public NotificationController(INotificationService notificationService, IEmailService emailService, ILogger<NotificationController> logger)
+    public NotificationController(
+        INotificationService notificationService,
+        IEmailService emailService,
+        ILogger<NotificationController> logger,
+        ICurrentUserService currentUserService)
     {
         _notificationService = notificationService;
         _emailService = emailService;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -49,13 +55,13 @@ public class NotificationController : ControllerBase
     {
         try
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            var currentUser = _currentUserService.GetCurrentUser();
+            if (!currentUser.UserId.HasValue)
             {
                 return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
-            var notifications = await _notificationService.GetUnreadNotificationsAsync(userId);
+            var notifications = await _notificationService.GetUnreadNotificationsAsync(currentUser.UserId.Value);
             
             return Ok(ApiResponse.Success(new
             {
@@ -78,13 +84,13 @@ public class NotificationController : ControllerBase
     {
         try
         {
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            var currentUser = _currentUserService.GetCurrentUser();
+            if (!currentUser.UserId.HasValue)
             {
                 return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
-            await _notificationService.MarkAsReadAsync(notificationId, userId);
+            await _notificationService.MarkAsReadAsync(notificationId, currentUser.UserId.Value);
 
             return Ok(ApiResponse.Success<object?>(null, "Notification marked as read"));
         }
@@ -103,13 +109,13 @@ public class NotificationController : ControllerBase
     {
         try
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            var currentUser = _currentUserService.GetCurrentUser();
+            if (!currentUser.UserId.HasValue)
             {
                 return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
-            await _notificationService.ClearNotificationsAsync(userId);
+            await _notificationService.ClearNotificationsAsync(currentUser.UserId.Value);
             
             return Ok(ApiResponse.Success<object?>(null, "All notifications cleared"));
         }
@@ -129,14 +135,14 @@ public class NotificationController : ControllerBase
     {
         try
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            var currentUser = _currentUserService.GetCurrentUser();
+            if (!currentUser.UserId.HasValue)
             {
                 return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
             await _notificationService.SendNotificationAsync(
-                userId,
+                currentUser.UserId.Value,
                 "Test Notification",
                 "This is a test notification from Smart Farm IoT System.",
                 NotificationType.Info

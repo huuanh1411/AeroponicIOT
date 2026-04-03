@@ -176,7 +176,6 @@ C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\1l4su
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\z5kq5atqqw-{0}-oxzzoj6xvu-oxzzoj6xvu.gz
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\vfzc4efsc4-{0}-g2vs9386gt-g2vs9386gt.gz
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\z7iwfc1ken-{0}-fcyql0o68s-fcyql0o68s.gz
-C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\yhkp00c8ya-{0}-7dl0n1ygzw-7dl0n1ygzw.gz
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\0nlrjukzlm-{0}-1iwr5thkth-1iwr5thkth.gz
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\8wzlgoae7g-{0}-nbrbtj2k5g-nbrbtj2k5g.gz
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\rzwd9tmpp2-{0}-wtfy4bdk4g-wtfy4bdk4g.gz
@@ -194,3 +193,16 @@ C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\refint\Aeroponic
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\AeroponicIOT.pdb
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\AeroponicIOT.genruntimeconfig.cache
 C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\ref\AeroponicIOT.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\Microsoft.Extensions.Caching.StackExchangeRedis.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.Api.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.Api.ProviderBuilderExtensions.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.Exporter.OpenTelemetryProtocol.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.Extensions.Hosting.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.Instrumentation.AspNetCore.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.Instrumentation.Http.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\OpenTelemetry.Instrumentation.Runtime.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\Pipelines.Sockets.Unofficial.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\StackExchange.Redis.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Release\net10.0\compressed\yhkp00c8ya-{0}-yd9504m24l-yd9504m24l.gz
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Release\net10.0\docs\observability\grafana-aeroponiciot-performance.json

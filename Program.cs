@@ -75,6 +75,11 @@ builder.Services.AddOptions<OnboardingProtectionOptions>()
 builder.Services.AddOptions<CorsOptions>()
     .Bind(builder.Configuration.GetSection("Cors"));
 
+builder.Services.AddOptions<PerformanceBudgetOptions>()
+    .Bind(builder.Configuration.GetSection("PerformanceBudgets"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
@@ -189,6 +194,8 @@ else
 }
 
 builder.Services.AddScoped<IOnboardingAttemptTracker, DistributedOnboardingAttemptTracker>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
 
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Application is running"), tags: new[] { "live" })
@@ -232,7 +239,8 @@ builder.Services.AddOpenTelemetry()
             .AddMeter(
                 "Microsoft.AspNetCore.Hosting",
                 "Microsoft.AspNetCore.Server.Kestrel",
-                "System.Net.Http")
+                "System.Net.Http",
+                PerformanceBudgetMiddleware.MeterName)
             .AddRuntimeInstrumentation();
 
         if (!string.IsNullOrWhiteSpace(otlpEndpoint))
@@ -264,6 +272,11 @@ builder.Services.AddHostedService<LogRetentionBackgroundService>();
 
 var app = builder.Build();
 
+var applyMigrationsOnStartup = builder.Configuration.GetValue<bool?>("Startup:ApplyMigrationsOnStartup") ?? true;
+var seedDefaultCropsOnStartup = builder.Configuration.GetValue<bool?>("Startup:SeedDefaultCropsOnStartup") ?? true;
+var failFastOnInitializationError = builder.Configuration.GetValue<bool?>("Startup:FailFastOnInitializationError")
+    ?? app.Environment.IsProduction();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -273,6 +286,7 @@ if (app.Environment.IsDevelopment())
 app.UseForwardedHeaders();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<PerformanceBudgetMiddleware>();
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 if (!app.Environment.IsEnvironment("Testing"))
 {
@@ -320,16 +334,26 @@ using (var scope = app.Services.CreateScope())
     // Apply migrations on startup so the container can initialize schema automatically.
     try
     {
-        if (dbContext.Database.IsRelational())
+        if (applyMigrationsOnStartup && dbContext.Database.IsRelational())
         {
             dbContext.Database.Migrate();
         }
-        await SeedDefaultCropsAsync(dbContext, logger);
+
+        if (seedDefaultCropsOnStartup)
+        {
+            await SeedDefaultCropsAsync(dbContext, logger);
+        }
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "An error occurred while migrating or initializing the database.");
-        // Let the app continue to run; in container environments the DB may come up after the app.
+        if (failFastOnInitializationError)
+        {
+            throw;
+        }
+
+        // Let the app continue to run when fail-fast is disabled;
+        // in container environments the DB may come up after the app.
     }
 }
 

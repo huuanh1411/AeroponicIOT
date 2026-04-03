@@ -2,6 +2,7 @@ using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
 using AeroponicIOT.Services.Mqtt;
+using AeroponicIOT.Services.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,12 +18,18 @@ public class ActuatorController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IMqttService _mqttService;
     private readonly ILogger<ActuatorController> _logger;
+    private readonly ICurrentUserService _currentUserService;
 
-    public ActuatorController(ApplicationDbContext context, IMqttService mqttService, ILogger<ActuatorController> logger)
+    public ActuatorController(
+        ApplicationDbContext context,
+        IMqttService mqttService,
+        ILogger<ActuatorController> logger,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _mqttService = mqttService;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost("control")]
@@ -41,20 +48,20 @@ public class ActuatorController : ControllerBase
             }
 
             // Ensure requester owns the device or is admin
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
                 {
-                    _logger.LogWarning("Unauthorized actuator control attempt by user {UserId} on device {DeviceId}", userIdClaim, device.Id);
+                    _logger.LogWarning("Unauthorized actuator control attempt by user {UserId} on device {DeviceId}", currentUser.UserId, device.Id);
                     return Forbid();
                 }
             }
 
             // Validate action
-            if (controlDto.Action.ToUpper() != "ON" && controlDto.Action.ToUpper() != "OFF")
+            var normalizedAction = controlDto.Action.ToUpperInvariant();
+            if (normalizedAction != "ON" && normalizedAction != "OFF")
             {
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Action must be 'ON' or 'OFF'");
             }
@@ -64,7 +71,7 @@ public class ActuatorController : ControllerBase
             {
                 DeviceId = device.Id,
                 ActuatorType = controlDto.ActuatorType,
-                Action = controlDto.Action.ToUpper(),
+                Action = normalizedAction,
                 Timestamp = DateTime.UtcNow
             };
 
@@ -108,12 +115,11 @@ public class ActuatorController : ControllerBase
             if (device == null)
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
                 {
                     return Forbid();
                 }
@@ -121,8 +127,17 @@ public class ActuatorController : ControllerBase
 
             var logs = await _context.ActuatorLogs
                 .Where(al => al.DeviceId == deviceId && al.Timestamp >= cutoffTime)
-                .Include(al => al.Device)
                 .OrderByDescending(al => al.Timestamp)
+                .Select(al => new ActuatorLogDto
+                {
+                    Id = al.Id,
+                    DeviceId = al.DeviceId,
+                    DeviceName = al.Device != null ? al.Device.DeviceName : null,
+                    MacAddress = al.Device != null ? al.Device.MacAddress : null,
+                    ActuatorType = al.ActuatorType ?? string.Empty,
+                    Action = al.Action ?? string.Empty,
+                    Timestamp = al.Timestamp
+                })
                 .ToListAsync();
 
             return Ok(ApiResponse.Success(logs, "Actuator logs retrieved"));
@@ -156,13 +171,13 @@ public class ActuatorController : ControllerBase
                 deviceName = device.Name,
                 macAddress = device.MacAddress,
                 actuatorType = controlDto.ActuatorType,
-                action = controlDto.Action.ToUpper(),
+                action = controlDto.Action.ToUpperInvariant(),
                 timestamp = DateTime.UtcNow
             };
 
             var jsonPayload = JsonSerializer.Serialize(payload);
             
-            var delivered = await _mqttService.PublishAsync(topic, jsonPayload, retainFlag: true);
+            var delivered = await _mqttService.PublishAsync(topic, jsonPayload, retainFlag: false);
             if (!delivered)
             {
                 _logger.LogWarning("Control command failed to publish via MQTT to {Topic}", topic);

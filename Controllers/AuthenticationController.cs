@@ -1,12 +1,16 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Options;
+using AeroponicIOT.Services.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 
@@ -23,14 +27,20 @@ public class AuthenticationController : ControllerBase
     };
 
     private readonly ApplicationDbContext _context;
-    private readonly IConfiguration _configuration;
+    private readonly JwtSettingsOptions _jwtSettings;
     private readonly ILogger<AuthenticationController> _logger;
+    private readonly ICurrentUserService _currentUserService;
 
-    public AuthenticationController(ApplicationDbContext context, IConfiguration configuration, ILogger<AuthenticationController> logger)
+    public AuthenticationController(
+        ApplicationDbContext context,
+        IOptions<JwtSettingsOptions> jwtSettings,
+        ILogger<AuthenticationController> logger,
+        ICurrentUserService currentUserService)
     {
         _context = context;
-        _configuration = configuration;
+        _jwtSettings = jwtSettings.Value;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -42,18 +52,34 @@ public class AuthenticationController : ControllerBase
     {
         try
         {
+            var username = request.Username!.Trim();
+            var email = request.Email?.Trim();
+
             // Check if user already exists
             var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == request.Username);
+                .AsNoTracking()
+                .AnyAsync(u => u.Username == username);
 
-            if (existingUser != null)
+            if (existingUser)
             {
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Username already exists", "username_exists");
             }
 
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                var existingEmail = await _context.Users
+                    .AsNoTracking()
+                    .AnyAsync(u => u.Email == email);
+
+                if (existingEmail)
+                {
+                    return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Email already exists", "email_exists");
+                }
+            }
+
             // Determine role server-side. Only an authenticated Administrator may assign roles.
             var roleToAssign = "Farmer";
-            if (User?.Identity != null && User.Identity.IsAuthenticated && User.IsInRole("Administrator") && !string.IsNullOrWhiteSpace(request.Role))
+            if (_currentUserService.GetCurrentUser().IsAdministrator && !string.IsNullOrWhiteSpace(request.Role))
             {
                 if (!TryNormalizeRole(request.Role, out var normalizedRole))
                 {
@@ -66,8 +92,8 @@ public class AuthenticationController : ControllerBase
             // Create new user
             var user = new User
             {
-                Username = request.Username,
-                Email = request.Email,
+                Username = username,
+                Email = email,
                 Role = roleToAssign,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 CreatedAt = DateTime.UtcNow
@@ -114,8 +140,9 @@ public class AuthenticationController : ControllerBase
         try
         {
             // Find user by username
+            var username = request.Username!.Trim();
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == request.Username);
+                .FirstOrDefaultAsync(u => u.Username == username);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             {
@@ -130,8 +157,7 @@ public class AuthenticationController : ControllerBase
 
             // Generate JWT token
             var token = GenerateJwtToken(user);
-            var expiresAt = DateTime.UtcNow.AddMinutes(
-                int.Parse(_configuration.GetSection("JwtSettings")["ExpirationMinutes"] ?? "1440"));
+            var expiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes);
 
             _logger.LogInformation("User {Username} logged in successfully", user.Username);
 
@@ -173,13 +199,13 @@ public class AuthenticationController : ControllerBase
     {
         try
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            var currentUser = _currentUserService.GetCurrentUser();
+            if (!currentUser.UserId.HasValue)
             {
                 return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
             }
 
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _context.Users.FindAsync(currentUser.UserId.Value);
             if (user == null)
             {
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "User not found");
@@ -260,15 +286,12 @@ public class AuthenticationController : ControllerBase
     /// </summary>
     private string GenerateJwtToken(User user)
     {
-        var jwtSettings = _configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured. Set JwtSettings:SecretKey in configuration or environment variables.");
-        var expirationMinutes = int.Parse(jwtSettings["ExpirationMinutes"] ?? "1440");
-        var key = Encoding.ASCII.GetBytes(secretKey);
+        var key = Encoding.ASCII.GetBytes(_jwtSettings.SecretKey);
         var tokenHandler = new JwtSecurityTokenHandler();
 
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString(CultureInfo.InvariantCulture)),
             new Claim(ClaimTypes.Name, user.Username ?? ""),
             new Claim(ClaimTypes.Email, user.Email ?? ""),
             new Claim(ClaimTypes.Role, user.Role ?? "Farmer")
@@ -277,9 +300,9 @@ public class AuthenticationController : ControllerBase
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            Expires = DateTime.UtcNow.AddMinutes(expirationMinutes),
-            Issuer = jwtSettings["Issuer"] ?? "AeroponicIOT",
-            Audience = jwtSettings["Audience"] ?? "AeroponicIOT",
+            Expires = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes),
+            Issuer = _jwtSettings.Issuer,
+            Audience = _jwtSettings.Audience,
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(key),
                 SecurityAlgorithms.HmacSha256Signature)

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.Security;
 
 namespace AeroponicIOT.Controllers;
 
@@ -14,11 +15,16 @@ public class AutomationController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<AutomationController> _logger;
+    private readonly ICurrentUserService _currentUserService;
 
-    public AutomationController(ApplicationDbContext context, ILogger<AutomationController> logger)
+    public AutomationController(
+        ApplicationDbContext context,
+        ILogger<AutomationController> logger,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -29,16 +35,15 @@ public class AutomationController : ControllerBase
     {
         try
         {
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
             IQueryable<AutomationRule> query = _context.AutomationRules.Include(r => r.Device);
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt))
+                if (!currentUser.UserId.HasValue)
                     return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
 
-                query = query.Where(r => r.Device != null && r.Device.UserId == userIdInt);
+                query = query.Where(r => r.Device != null && r.Device.UserId == currentUser.UserId.Value);
             }
 
             var rules = await query.OrderByDescending(r => r.IsActive)
@@ -68,12 +73,11 @@ public class AutomationController : ControllerBase
             if (rule == null)
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || rule.Device == null || rule.Device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || rule.Device == null || rule.Device.UserId != currentUser.UserId.Value)
                 {
                     return Forbid();
                 }
@@ -104,12 +108,11 @@ public class AutomationController : ControllerBase
             if (device == null)
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Device not found");
 
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
                     return Forbid();
             }
 
@@ -161,12 +164,11 @@ public class AutomationController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var device = await _context.Devices.FindAsync(rule.DeviceId);
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device == null || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device == null || device.UserId != currentUser.UserId.Value)
                     return Forbid();
             }
 
@@ -208,12 +210,11 @@ public class AutomationController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var device = await _context.Devices.FindAsync(rule.DeviceId);
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device == null || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device == null || device.UserId != currentUser.UserId.Value)
                     return Forbid();
             }
 
@@ -244,12 +245,11 @@ public class AutomationController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var device = await _context.Devices.FindAsync(rule.DeviceId);
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device == null || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device == null || device.UserId != currentUser.UserId.Value)
                     return Forbid();
             }
 
@@ -278,12 +278,11 @@ public class AutomationController : ControllerBase
             if (device == null)
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
                     return Forbid();
             }
 

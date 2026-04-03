@@ -1,6 +1,7 @@
 using AeroponicIOT.Services.Mqtt;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Options;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
@@ -9,6 +10,7 @@ namespace AeroponicIOT.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = "FarmerOrAdmin")]
 public class MqttController : ControllerBase
 {
     private readonly IMqttService _mqttService;

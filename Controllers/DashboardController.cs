@@ -1,10 +1,10 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace AeroponicIOT.Controllers;
 
@@ -15,11 +15,16 @@ public class DashboardController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<DashboardController> _logger;
+    private readonly ICurrentUserService _currentUserService;
 
-    public DashboardController(ApplicationDbContext context, ILogger<DashboardController> logger)
+    public DashboardController(
+        ApplicationDbContext context,
+        ILogger<DashboardController> logger,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet("latest")]
@@ -30,17 +35,16 @@ public class DashboardController : ControllerBase
             page = Math.Max(page, 1);
             pageSize = Math.Clamp(pageSize, 1, 200);
 
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
             IQueryable<Device> devicesQuery;
-            if (userRole == "Administrator")
+            if (currentUser.IsAdministrator)
             {
                 devicesQuery = _context.Devices.AsNoTracking();
             }
-            else if (int.TryParse(userIdClaim, out var userIdInt))
+            else if (currentUser.UserId.HasValue)
             {
-                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == userIdInt);
+                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == currentUser.UserId.Value);
             }
             else
             {
@@ -59,11 +63,11 @@ public class DashboardController : ControllerBase
                 d.Status == "active" ||
                 d.Status == "online");
 
-            var pagedDevices = await devicesQuery
+            var pagedDeviceRows = await devicesQuery
                 .OrderBy(d => d.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(d => new DeviceStatusDto
+                .Select(d => new
                 {
                     Id = d.Id,
                     Name = d.DeviceName ?? "Unknown Device",
@@ -75,31 +79,89 @@ public class DashboardController : ControllerBase
                                d.Status == "active" ||
                                d.Status == "online",
                     LastSeen = d.LastSeen,
-                    CropName = d.Crop != null ? d.Crop.Name : null,
-                    LatestSensorData = _context.SensorLogs
-                        .Where(sl => sl.DeviceId == d.Id)
-                        .OrderByDescending(sl => sl.Timestamp)
-                        .Select(sl => new SensorDataDto
-                        {
-                            MacAddress = d.MacAddress,
-                            Ph = (double?)sl.Ph,
-                            Tds = sl.TdsPpm,
-                            WaterTemperature = sl.WaterTemp,
-                            AirHumidity = sl.Humidity,
-                            LightIntensity = sl.LightIntensity
-                        })
-                        .FirstOrDefault()
+                    CropName = d.Crop != null ? d.Crop.Name : null
                 })
                 .ToListAsync();
+
+            var pagedDeviceIds = pagedDeviceRows
+                .Select(d => d.Id)
+                .ToArray();
+            var macAddressByDeviceId = pagedDeviceRows.ToDictionary(d => d.Id, d => d.MacAddress);
+
+            Dictionary<int, SensorDataDto> latestSensorByDeviceId = new();
+            if (pagedDeviceIds.Length > 0)
+            {
+                var latestSensorTimestamps = await _context.SensorLogs
+                    .AsNoTracking()
+                    .Where(sl => pagedDeviceIds.Contains(sl.DeviceId))
+                    .GroupBy(sl => sl.DeviceId)
+                    .Select(group => new
+                    {
+                        DeviceId = group.Key,
+                        LatestTimestamp = group.Max(sl => sl.Timestamp)
+                    })
+                    .ToListAsync();
+
+                var latestSensorLogs = await _context.SensorLogs
+                    .AsNoTracking()
+                    .Where(sl => pagedDeviceIds.Contains(sl.DeviceId))
+                    .ToListAsync();
+
+                latestSensorByDeviceId = latestSensorTimestamps
+                    .Join(
+                        latestSensorLogs,
+                        timestamp => new { timestamp.DeviceId, timestamp.LatestTimestamp },
+                        sensorLog => new { sensorLog.DeviceId, LatestTimestamp = sensorLog.Timestamp },
+                        (timestamp, sensorLog) => new { sensorLog.DeviceId, SensorLog = sensorLog })
+                    .GroupBy(x => x.DeviceId)
+                    .ToDictionary(
+                        group => group.Key,
+                        group =>
+                        {
+                            var latest = group
+                                .OrderByDescending(x => x.SensorLog.Id)
+                                .First()
+                                .SensorLog;
+
+                            var macAddress = macAddressByDeviceId[latest.DeviceId];
+
+                            return new SensorDataDto
+                            {
+                                MacAddress = macAddress,
+                                Ph = (double?)latest.Ph,
+                                Tds = latest.TdsPpm,
+                                WaterTemperature = latest.WaterTemp,
+                                AirHumidity = latest.Humidity,
+                                LightIntensity = latest.LightIntensity
+                            };
+                        });
+            }
+
+            var pagedDevices = pagedDeviceRows
+                .Select(d => new DeviceStatusDto
+                {
+                    Id = d.Id,
+                    Name = d.Name,
+                    MacAddress = d.MacAddress,
+                    GardenId = d.GardenId,
+                    GardenName = d.GardenName,
+                    IsActive = d.IsActive,
+                    LastSeen = d.LastSeen,
+                    CropName = d.CropName,
+                    LatestSensorData = latestSensorByDeviceId.TryGetValue(d.Id, out var latestSensor)
+                        ? latestSensor
+                        : null
+                })
+                .ToList();
 
             var activeAlertsQuery = _context.Alerts
                 .AsNoTracking()
                 .Where(a => !a.IsResolved)
                 .AsQueryable();
 
-            if (userRole != "Administrator" && int.TryParse(userIdClaim, out var alertsUserId))
+            if (!currentUser.IsAdministrator && currentUser.UserId.HasValue)
             {
-                activeAlertsQuery = activeAlertsQuery.Where(a => a.Device != null && a.Device.UserId == alertsUserId);
+                activeAlertsQuery = activeAlertsQuery.Where(a => a.Device != null && a.Device.UserId == currentUser.UserId.Value);
             }
 
             if (gardenId.HasValue)
@@ -144,18 +206,17 @@ public class DashboardController : ControllerBase
     {
         try
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
             // Get user's devices or all if admin
             IQueryable<Device> devicesQuery;
-            if (userRole == "Administrator")
+            if (currentUser.IsAdministrator)
             {
                 devicesQuery = _context.Devices.AsNoTracking();
             }
-            else if (int.TryParse(userIdClaim, out var userIdInt))
+            else if (currentUser.UserId.HasValue)
             {
-                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == userIdInt);
+                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == currentUser.UserId.Value);
             }
             else
             {
@@ -214,9 +275,9 @@ public class DashboardController : ControllerBase
             // Check for critical alerts
             IQueryable<Alert> criticalAlertsQuery = _context.Alerts.Where(a => !a.IsResolved);
 
-            if (userRole != "Administrator" && int.TryParse(userIdClaim, out var alertsUserId))
+            if (!currentUser.IsAdministrator && currentUser.UserId.HasValue)
             {
-                criticalAlertsQuery = criticalAlertsQuery.Where(a => a.Device != null && a.Device.UserId == alertsUserId);
+                criticalAlertsQuery = criticalAlertsQuery.Where(a => a.Device != null && a.Device.UserId == currentUser.UserId.Value);
             }
 
             var criticalAlerts = await criticalAlertsQuery.CountAsync();
@@ -256,18 +317,17 @@ public class DashboardController : ControllerBase
             page = Math.Max(page, 1);
             pageSize = Math.Clamp(pageSize, 1, 200);
 
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
             // Get user's devices
             IQueryable<Device> devicesQuery;
-            if (userRole == "Administrator")
+            if (currentUser.IsAdministrator)
             {
                 devicesQuery = _context.Devices.AsNoTracking();
             }
-            else if (int.TryParse(userIdClaim, out var userIdInt))
+            else if (currentUser.UserId.HasValue)
             {
-                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == userIdInt);
+                devicesQuery = _context.Devices.AsNoTracking().Where(d => d.UserId == currentUser.UserId.Value);
             }
             else
             {
@@ -348,16 +408,15 @@ public class DashboardController : ControllerBase
             var cutoffTime = DateTime.UtcNow.AddHours(-hours);
 
             // Ensure the requesting user owns the device or is an admin
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var currentUser = _currentUserService.GetCurrentUser();
 
             var device = await _context.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.Id == deviceId);
             if (device == null)
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
-            if (userRole != "Administrator")
+            if (!currentUser.IsAdministrator)
             {
-                if (!int.TryParse(userIdClaim, out var userIdInt) || device.UserId != userIdInt)
+                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
                 {
                     return Forbid();
                 }

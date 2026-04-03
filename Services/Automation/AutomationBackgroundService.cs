@@ -267,7 +267,8 @@ public class AutomationBackgroundService : BackgroundService
 
         var jsonPayload = JsonSerializer.Serialize(payload);
 
-        var delivered = await mqttService.PublishAsync(topic, jsonPayload, retainFlag: true);
+        // Control commands should not be retained to avoid replaying stale actions on reconnect.
+        var delivered = await mqttService.PublishAsync(topic, jsonPayload, retainFlag: false);
         if (!delivered)
         {
             throw new InvalidOperationException($"MQTT publish failed for automation rule {rule.Id}");
