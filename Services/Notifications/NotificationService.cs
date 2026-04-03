@@ -3,6 +3,7 @@ using AeroponicIOT.Models;
 using AeroponicIOT.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 
 namespace AeroponicIOT.Services.Notifications;
 
@@ -88,7 +89,7 @@ public class NotificationService : INotificationService
                 return;
             }
 
-            var notificationType = severity.ToLower() switch
+            var notificationType = severity.ToLower(CultureInfo.InvariantCulture) switch
             {
                 "high" or "critical" => NotificationType.Alert,
                 "medium" or "warning" => NotificationType.Warning,

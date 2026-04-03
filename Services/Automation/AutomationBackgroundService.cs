@@ -3,6 +3,7 @@ using AeroponicIOT.Data;
 using AeroponicIOT.Models;
 using AeroponicIOT.Services.Mqtt;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace AeroponicIOT.Services.Automation;
 
@@ -169,7 +170,7 @@ public class AutomationBackgroundService : BackgroundService
             return false;
         }
 
-        decimal? parameterValue = rule.ConditionParameter.ToLower() switch
+        decimal? parameterValue = rule.ConditionParameter.ToLower(CultureInfo.InvariantCulture) switch
         {
             "ph" => latestLog.Ph,
             "tds" or "tds_ppm" or "ec" => latestLog.TdsPpm,

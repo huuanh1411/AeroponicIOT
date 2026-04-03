@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 using System.Security.Cryptography;
 namespace AeroponicIOT.Controllers;
 
@@ -694,12 +695,12 @@ public class DeviceController : ControllerBase
             return null;
         }
 
-        Response.Headers["Retry-After"] = retryAfterSeconds.Value.ToString();
+        Response.Headers["Retry-After"] = retryAfterSeconds.Value.ToString(CultureInfo.InvariantCulture);
         return ApiProblem(StatusCodes.Status429TooManyRequests, "Too Many Requests", "Too many invalid onboarding attempts. Please retry later.");
     }
 
     // Helper method to validate MAC address format
-    private bool IsValidMacAddress(string macAddress)
+    private static bool IsValidMacAddress(string macAddress)
     {
         if (string.IsNullOrEmpty(macAddress))
             return false;

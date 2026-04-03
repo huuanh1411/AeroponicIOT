@@ -54,7 +54,7 @@ public class ActuatorAuthorizationIntegrationTests : IClassFixture<TestWebApplic
     }
 
     [Fact]
-    public async Task GetActuatorLogsReturnsOnlyOwnerAccessibleLogs()
+    public async Task GetActuatorLogsReturnsDtoContractForAuthorizedUsers()
     {
         await ResetDatabaseAsync(db =>
         {
@@ -90,7 +90,17 @@ public class ActuatorAuthorizationIntegrationTests : IClassFixture<TestWebApplic
         var ownerResponse = await ownerClient.GetAsync("/api/actuator/logs/10");
         Assert.Equal(HttpStatusCode.OK, ownerResponse.StatusCode);
         var ownerPayload = await ownerResponse.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Single(ownerPayload.GetProperty("data").EnumerateArray());
+        var logEntries = ownerPayload.GetProperty("data");
+        Assert.Single(logEntries.EnumerateArray());
+
+        var firstLog = logEntries[0];
+        Assert.Equal(50, firstLog.GetProperty("id").GetInt32());
+        Assert.Equal(10, firstLog.GetProperty("deviceId").GetInt32());
+        Assert.Equal("Pump Device", firstLog.GetProperty("deviceName").GetString());
+        Assert.Equal("AA:BB:CC:DD:EE:31", firstLog.GetProperty("macAddress").GetString());
+        Assert.Equal("Pump", firstLog.GetProperty("actuatorType").GetString());
+        Assert.Equal("ON", firstLog.GetProperty("action").GetString());
+        Assert.True(firstLog.TryGetProperty("timestamp", out _));
 
         using var adminClient = _factory.CreateClient();
         adminClient.DefaultRequestHeaders.Add("X-Test-UserId", "99");
@@ -98,6 +108,8 @@ public class ActuatorAuthorizationIntegrationTests : IClassFixture<TestWebApplic
 
         var adminResponse = await adminClient.GetAsync("/api/actuator/logs/10");
         Assert.Equal(HttpStatusCode.OK, adminResponse.StatusCode);
+        var adminPayload = await adminResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Single(adminPayload.GetProperty("data").EnumerateArray());
     }
 
     private async Task ResetDatabaseAsync(Action<ApplicationDbContext> seed)
