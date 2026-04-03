@@ -437,7 +437,7 @@ public class DashboardController : ControllerBase
         }
     }
 
-    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    private ObjectResult ApiProblem(int statusCode, string title, string detail)
     {
         return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }

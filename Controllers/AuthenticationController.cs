@@ -235,7 +235,7 @@ public class AuthenticationController : ControllerBase
         }
     }
 
-    private IActionResult ApiProblem(int statusCode, string title, string detail, string? errorCode = null)
+    private ObjectResult ApiProblem(int statusCode, string title, string detail, string? errorCode = null)
     {
         return ProblemResponseFactory.Create(this, statusCode, title, detail, errorCode);
     }
@@ -251,7 +251,7 @@ public class AuthenticationController : ControllerBase
         return AllowedRoles.TryGetValue(role.Trim(), out normalizedRole!);
     }
 
-    private IActionResult AuthSuccess<TLegacy, TData>(TLegacy legacyPayload, TData data, string message)
+    private OkObjectResult AuthSuccess<TLegacy, TData>(TLegacy legacyPayload, TData data, string message)
     {
         if (UseLegacyAuthResponse())
         {

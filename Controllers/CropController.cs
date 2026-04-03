@@ -15,6 +15,24 @@ public class CropController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly ILogger<CropController> _logger;
 
+    private static readonly Action<ILogger, Exception> LogErrorGettingCrops =
+        LoggerMessage.Define(LogLevel.Error, new EventId(1, nameof(GetAllCrops)), "Error getting crops");
+
+    private static readonly Action<ILogger, int, Exception> LogErrorGettingCrop =
+        LoggerMessage.Define<int>(LogLevel.Error, new EventId(2, nameof(GetCropById)), "Error getting crop {CropId}");
+
+    private static readonly Action<ILogger, int, Exception?> LogWarningCropNotFound =
+        LoggerMessage.Define<int>(LogLevel.Warning, new EventId(6, nameof(GetCropById)), "Crop {CropId} not found");
+
+    private static readonly Action<ILogger, Exception> LogErrorCreatingCrop =
+        LoggerMessage.Define(LogLevel.Error, new EventId(3, nameof(CreateCrop)), "Error creating crop");
+
+    private static readonly Action<ILogger, int, Exception> LogErrorUpdatingCrop =
+        LoggerMessage.Define<int>(LogLevel.Error, new EventId(4, nameof(UpdateCrop)), "Error updating crop {CropId}");
+
+    private static readonly Action<ILogger, int, Exception> LogErrorDeletingCrop =
+        LoggerMessage.Define<int>(LogLevel.Error, new EventId(5, nameof(DeleteCrop)), "Error deleting crop {CropId}");
+
     public CropController(ApplicationDbContext context, ILogger<CropController> logger)
     {
         _context = context;
@@ -36,7 +54,7 @@ public class CropController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting crops");
+            LogErrorGettingCrops(_logger, ex);
             return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving crops");
         }
     }
@@ -53,7 +71,7 @@ public class CropController : ControllerBase
 
             if (crop == null)
             {
-                _logger.LogWarning("Crop {CropId} not found", id);
+                LogWarningCropNotFound(_logger, id, null);
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Crop not found");
             }
 
@@ -87,7 +105,7 @@ public class CropController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting crop {CropId}", id);
+            LogErrorGettingCrop(_logger, id, ex);
             return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error retrieving crop");
         }
     }
@@ -122,7 +140,7 @@ public class CropController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating crop");
+            LogErrorCreatingCrop(_logger, ex);
             return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error creating crop");
         }
     }
@@ -163,7 +181,7 @@ public class CropController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating crop {CropId}", id);
+            LogErrorUpdatingCrop(_logger, id, ex);
             return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error updating crop");
         }
     }
@@ -183,7 +201,7 @@ public class CropController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Crop not found");
             }
 
-            if (crop.Devices.Any())
+            if (crop.Devices.Count > 0)
             {
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Cannot delete a crop that is currently assigned to devices");
             }
@@ -196,12 +214,12 @@ public class CropController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting crop {CropId}", id);
+            LogErrorDeletingCrop(_logger, id, ex);
             return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error deleting crop");
         }
     }
 
-    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    private ObjectResult ApiProblem(int statusCode, string title, string detail)
     {
         return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }

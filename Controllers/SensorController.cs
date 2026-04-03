@@ -39,7 +39,7 @@ public class SensorController : ControllerBase
         return Ok(ApiResponse.Success<object?>(null, "Sensor data received successfully"));
     }
 
-    private IActionResult ApiProblem(int statusCode, string title, string detail)
+    private ObjectResult ApiProblem(int statusCode, string title, string detail)
     {
         return ProblemResponseFactory.Create(this, statusCode, title, detail);
     }
