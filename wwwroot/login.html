@@ -182,13 +182,19 @@
     </div>
 
     <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
     <script>
-        const API_URL = window.API_BASE || (window.location.origin + '/api');
+        const API_URL = Auth.getApiBase();
 
-        // Check if already logged in
-        window.addEventListener('load', () => {
-            const token = localStorage.getItem('token');
-            if (token) {
+        // Only redirect when the stored session is a valid JWT accepted by the API
+        window.addEventListener('load', async () => {
+            if (!Auth.getStoredToken()) {
+                Auth.clearAuthStorage();
+                return;
+            }
+
+            const valid = await Auth.verifyStoredSession();
+            if (valid) {
                 window.location.href = 'index.html';
             }
         });
@@ -196,44 +202,93 @@
         // Login
         document.getElementById('loginSubmit').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('loginUsername').value;
+            const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
+            const submitBtn = e.target.querySelector('button[type="submit"]');
 
-            if (!username.trim() || !password) {
+            if (!username || !password) {
                 showError('loginError', 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu');
                 return;
             }
 
             document.getElementById('loginLoading').style.display = 'block';
             document.getElementById('loginError').style.display = 'none';
+            if (submitBtn) submitBtn.disabled = true;
 
             try {
                 const response = await fetch(`${API_URL}/authentication/login`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
-                const data = await response.json();
+                const data = await readJsonResponse(response);
 
-                if (data.success) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('username', data.username);
-                    localStorage.setItem('role', data.role);
-                    localStorage.setItem('userId', data.userId);
-                    window.location.href = 'index.html';
-                } else {
-                    showError('loginError', data.message || 'Đăng nhập thất bại');
+                if (response.status === 429) {
+                    showError('loginError', getRateLimitMessage(response, data));
+                    return;
                 }
+
+                const loginResult = Auth.extractLoginResult(data);
+                if (response.ok && loginResult?.token) {
+                    try {
+                        Auth.saveAuthSession({
+                            token: loginResult.token,
+                            username: loginResult.username || username,
+                            role: loginResult.role || 'Farmer',
+                            userId: loginResult.userId
+                        });
+                    } catch {
+                        showError('loginError', 'Phản hồi đăng nhập không hợp lệ. Vui lòng thử lại.');
+                        return;
+                    }
+
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                showError('loginError', parseLoginError(data, response.status));
             } catch (error) {
-                showError('loginError', 'Lỗi kết nối. Vui lòng thử lại.');
+                showError('loginError', 'Không thể kết nối máy chủ. Vui lòng thử lại.');
                 console.error('Login error:', error);
             } finally {
                 document.getElementById('loginLoading').style.display = 'none';
+                if (submitBtn) submitBtn.disabled = false;
             }
         });
+
+        async function readJsonResponse(response) {
+            const text = await response.text();
+            if (!text) return null;
+            try {
+                return JSON.parse(text);
+            } catch {
+                return null;
+            }
+        }
+
+        function getRateLimitMessage(response, data) {
+            const retryAfter = response.headers.get('Retry-After');
+            if (retryAfter) {
+                const seconds = Number.parseInt(retryAfter, 10);
+                if (!Number.isNaN(seconds) && seconds > 0) {
+                    return `Quá nhiều lần thử. Vui lòng đợi ${seconds} giây rồi thử lại.`;
+                }
+            }
+            if (data?.detail) return data.detail;
+            if (data?.message || data?.Message) return data.message || data.Message;
+            return 'Quá nhiều lần thử đăng nhập. Vui lòng đợi khoảng 1 phút rồi thử lại.';
+        }
+
+        function parseLoginError(data, status) {
+            if (status === 401) {
+                return data?.detail || 'Tên đăng nhập hoặc mật khẩu không đúng';
+            }
+            if (data?.detail) return data.detail;
+            if (data?.message || data?.Message) return data.message || data.Message;
+            if (data?.title && status === 400) return data.title;
+            return 'Đăng nhập thất bại';
+        }
 
         function showError(elementId, message) {
             const element = document.getElementById(elementId);

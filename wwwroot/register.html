@@ -31,7 +31,10 @@
 
                 <div class="form-group">
                     <label for="password">Mật khẩu</label>
-                    <input type="password" id="password" name="password" required placeholder="Nhập mật khẩu">
+                    <input type="password" id="password" name="password" required minlength="8"
+                        placeholder="Ít nhất 8 ký tự, có chữ hoa, thường và số"
+                        autocomplete="new-password">
+                    <span class="field-hint">Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và chữ số (vd: TestPass1)</span>
                     <span class="error-message" id="passwordError"></span>
                 </div>
 
@@ -42,15 +45,7 @@
                     <span class="error-message" id="confirmPasswordError"></span>
                 </div>
 
-                <div class="form-group">
-                    <label for="role">Vai trò</label>
-                    <select id="role" name="role" required>
-                        <option value="">Chọn vai trò</option>
-                        <option value="Farmer">Nông dân</option>
-                        <option value="Admin">Admin</option>
-                    </select>
-                    <span class="error-message" id="roleError"></span>
-                </div>
+                <p class="field-hint role-note">Tài khoản đăng ký mới được gán vai trò <strong>Nông dân</strong>.</p>
 
                 <div id="successMessage" class="success-message" style="display: none;">
                     <span id="successText"></span>
@@ -70,22 +65,25 @@
     </div>
 
     <script>
+        const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+        const FIELD_ERROR_IDS = {
+            username: 'usernameError',
+            email: 'emailError',
+            password: 'passwordError'
+        };
+
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Clear previous messages
             document.getElementById('successMessage').style.display = 'none';
             document.getElementById('errorMessage').style.display = 'none';
             clearErrors();
 
-            // Get form values
             const username = document.getElementById('username').value.trim();
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
-            const role = document.getElementById('role').value;
 
-            // Validate inputs
             let isValid = true;
 
             if (!username || username.length < 3) {
@@ -98,8 +96,9 @@
                 isValid = false;
             }
 
-            if (!password || password.length < 6) {
-                showError('passwordError', 'Mật khẩu phải có ít nhất 6 ký tự');
+            if (!isValidPassword(password)) {
+                showError('passwordError',
+                    'Mật khẩu phải có ít nhất 8 ký tự và gồm chữ hoa, chữ thường và chữ số');
                 isValid = false;
             }
 
@@ -108,48 +107,117 @@
                 isValid = false;
             }
 
-            if (!role) {
-                showError('roleError', 'Vui lòng chọn vai trò');
-                isValid = false;
-            }
-
             if (!isValid) return;
+
+            const submitBtn = e.target.querySelector('.btn-register');
+            submitBtn.disabled = true;
 
             try {
                 const response = await fetch(`${window.location.origin}/api/authentication/register`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        username: username,
-                        email: email,
-                        password: password,
-                        role: role
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
                 });
 
-                const data = await response.json();
+                const data = await readJsonResponse(response);
 
-                if (response.ok && data.success) {
-                    document.getElementById('successText').textContent = data.message || 'Đăng ký thành công! Đang chuyển sang trang đăng nhập...';
+                if (response.ok && data && (data.success === true || data.Success === true)) {
+                    const msg = data.message || data.Message ||
+                        'Đăng ký thành công! Đang chuyển sang trang đăng nhập...';
+                    document.getElementById('successText').textContent = msg;
                     document.getElementById('successMessage').style.display = 'block';
                     document.getElementById('registerForm').reset();
 
-                    // Redirect to login after 2 seconds
                     setTimeout(() => {
                         window.location.href = 'login.html';
                     }, 2000);
-                } else {
-                    document.getElementById('errorText').textContent = data.message || 'Đăng ký thất bại. Vui lòng thử lại.';
-                    document.getElementById('errorMessage').style.display = 'block';
+                    return;
                 }
+
+                const { message, fieldErrors } = parseRegisterError(data, response.status);
+                applyFieldErrors(fieldErrors);
+                showGlobalError(message);
             } catch (error) {
                 console.error('Registration error:', error);
-                document.getElementById('errorText').textContent = 'Đã xảy ra lỗi. Vui lòng thử lại.';
-                document.getElementById('errorMessage').style.display = 'block';
+                showGlobalError('Không thể kết nối máy chủ. Vui lòng thử lại.');
+            } finally {
+                submitBtn.disabled = false;
             }
         });
+
+        async function readJsonResponse(response) {
+            const text = await response.text();
+            if (!text) return null;
+            try {
+                return JSON.parse(text);
+            } catch {
+                return null;
+            }
+        }
+
+        function isValidPassword(password) {
+            return typeof password === 'string' && PASSWORD_RULE.test(password);
+        }
+
+        function parseRegisterError(data, status) {
+            const fieldErrors = {};
+            let message = 'Đăng ký thất bại. Vui lòng thử lại.';
+
+            if (status === 429) {
+                message = data?.detail || data?.message || data?.Message ||
+                    'Quá nhiều lần thử. Vui lòng đợi khoảng 1 phút rồi thử lại.';
+                return { message, fieldErrors };
+            }
+
+            if (!data) {
+                return { message, fieldErrors };
+            }
+
+            if (data.errors && typeof data.errors === 'object') {
+                for (const [key, messages] of Object.entries(data.errors)) {
+                    const text = Array.isArray(messages) ? messages[0] : String(messages);
+                    const normalized = key.charAt(0).toLowerCase() + key.slice(1);
+                    fieldErrors[normalized] = text;
+                }
+                const first = Object.values(fieldErrors)[0];
+                if (first) {
+                    message = first;
+                } else if (data.title) {
+                    message = data.title;
+                }
+                return { message, fieldErrors };
+            }
+
+            if (data.detail) {
+                message = data.detail;
+                if (data.errorCode === 'username_exists') {
+                    fieldErrors.username = data.detail;
+                } else if (data.errorCode === 'email_exists') {
+                    fieldErrors.email = data.detail;
+                }
+                return { message, fieldErrors };
+            }
+
+            if (data.message || data.Message) {
+                message = data.message || data.Message;
+            }
+
+            return { message, fieldErrors };
+        }
+
+        function applyFieldErrors(fieldErrors) {
+            for (const [field, text] of Object.entries(fieldErrors)) {
+                const elementId = FIELD_ERROR_IDS[field];
+                if (elementId && text) {
+                    showError(elementId, text);
+                }
+            }
+        }
+
+        function showGlobalError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').style.display = 'block';
+        }
 
         function showError(elementId, message) {
             document.getElementById(elementId).textContent = message;

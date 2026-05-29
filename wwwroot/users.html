@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý người dùng - Smart Farm IoT</title>
+    <link rel="stylesheet" href="css/users.css">
+</head>
+<body>
+    <div class="container">
+        <div id="usersHeader"></div>
+
+        <div class="content">
+            <section class="users-section">
+                <div class="section-header-row">
+                    <h2 class="section-title">Danh sách người dùng</h2>
+                    <button id="refreshUsersBtn" type="button" class="btn-primary">Làm mới</button>
+                </div>
+                <p class="helper-text">Chỉ quản trị viên có thể xem và chỉnh sửa vai trò người dùng. Sau khi đổi vai trò, người dùng cần đăng nhập lại.</p>
+                <div id="usersMessage" class="message-box" style="display: none;"></div>
+                <div class="table-wrap">
+                    <table class="users-table">
+                        <thead>
+                            <tr>
+                                <th>Tên đăng nhập</th>
+                                <th>Email</th>
+                                <th>Vai trò</th>
+                                <th>Thiết bị</th>
+                                <th>Đăng nhập gần nhất</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="6" class="loading-cell">Đang tải...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <span id="editUserModalClose" class="close">&times;</span>
+            <h2>Chỉnh sửa người dùng</h2>
+            <p id="editUsername" class="modal-username"></p>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label for="editUserEmail">Email</label>
+                    <input type="email" id="editUserEmail" maxlength="256" required>
+                </div>
+                <div class="form-group">
+                    <label for="editUserRole">Vai trò</label>
+                    <select id="editUserRole" required>
+                        <option value="Farmer">Nông dân</option>
+                        <option value="Administrator">Quản trị viên</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Lưu</button>
+                    <button type="button" id="cancelEditUserBtn" class="btn-secondary">Hủy</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/users.js"></script>
+</body>
+</html>

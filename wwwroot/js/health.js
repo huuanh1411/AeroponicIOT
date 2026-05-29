@@ -1,6 +1,10 @@
 const HEALTH_URL = '/health';
 
 function toVietnameseHealthStatus(value) {
+    if (!value) {
+        return '';
+    }
+
     const map = {
         Healthy: 'Khỏe',
         Unhealthy: 'Không khỏe',
@@ -10,12 +14,40 @@ function toVietnameseHealthStatus(value) {
         Running: 'Đang chạy',
         Stopped: 'Đã dừng'
     };
+
     return map[value] || value;
+}
+
+function findCheck(checks, name) {
+    if (!Array.isArray(checks)) {
+        return null;
+    }
+
+    return checks.find(check =>
+        check &&
+        typeof check.name === 'string' &&
+        check.name.toLowerCase() === name.toLowerCase()
+    ) || null;
+}
+
+function formatCheckStatus(check) {
+    if (!check) {
+        return { label: 'Không rõ', isHealthy: false, detail: '' };
+    }
+
+    const label = toVietnameseHealthStatus(check.status) || check.status || 'Không rõ';
+    const isHealthy = check.status === 'Healthy';
+    const detail = check.description || check.error || '';
+
+    return { label, isHealthy, detail };
+}
+
+function applyStatusColor(element, isHealthy) {
+    element.style.color = isHealthy ? '#4CAF50' : '#f44336';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     loadHealth();
-    // Auto-refresh every 10 seconds
     setInterval(loadHealth, 10000);
 });
 
@@ -35,15 +67,19 @@ async function loadHealth() {
         try {
             data = text ? JSON.parse(text) : {};
         } catch {
-            // Non-JSON body; show as raw text only.
             data = {};
         }
 
         const ok = response.ok;
+        const checks = data.checks || [];
 
-        statusEl.textContent = toVietnameseHealthStatus(data.status) || (ok ? 'Không rõ' : 'Không khỏe');
-        dbEl.textContent = toVietnameseHealthStatus(data.db) || 'Không rõ';
-        mqttEl.textContent = toVietnameseHealthStatus(data.mqtt) || 'Không rõ';
+        const overall = formatCheckStatus({ status: data.status });
+        const database = formatCheckStatus(findCheck(checks, 'database'));
+        const mqtt = formatCheckStatus(findCheck(checks, 'mqtt'));
+
+        statusEl.textContent = overall.label || (ok ? 'Không rõ' : 'Không khỏe');
+        dbEl.textContent = database.label;
+        mqttEl.textContent = mqtt.label;
 
         if (data.timestamp) {
             tsEl.textContent = new Date(data.timestamp).toLocaleString('vi-VN');
@@ -54,10 +90,9 @@ async function loadHealth() {
         lastCheckedEl.textContent = `Lần kiểm tra cuối: ${new Date().toLocaleString('vi-VN')}`;
         rawEl.textContent = text || '(phản hồi rỗng)';
 
-        // Simple coloring based on status
-        statusEl.style.color = ok && data.status === 'Healthy' ? '#4CAF50' : '#f44336';
-        dbEl.style.color = data.db === 'Connected' ? '#4CAF50' : '#f44336';
-        mqttEl.style.color = data.mqtt === 'Running' ? '#4CAF50' : '#f44336';
+        applyStatusColor(statusEl, ok && data.status === 'Healthy');
+        applyStatusColor(dbEl, database.isHealthy);
+        applyStatusColor(mqttEl, mqtt.isHealthy);
     } catch (err) {
         statusEl.textContent = 'Không thể kết nối';
         dbEl.textContent = 'Không rõ';
@@ -66,13 +101,12 @@ async function loadHealth() {
         lastCheckedEl.textContent = `Lần kiểm tra cuối: ${new Date().toLocaleString('vi-VN')}`;
         rawEl.textContent = `Yêu cầu thất bại: ${err}`;
 
-        statusEl.style.color = '#f44336';
-        dbEl.style.color = '#f44336';
-        mqttEl.style.color = '#f44336';
+        applyStatusColor(statusEl, false);
+        applyStatusColor(dbEl, false);
+        applyStatusColor(mqttEl, false);
     }
 }
 
 function goBackToDashboard() {
     window.location.href = 'index.html';
 }
-

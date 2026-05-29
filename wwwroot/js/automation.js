@@ -34,8 +34,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Check authentication
 function checkAuthentication() {
-    const token = localStorage.getItem('token');
+    const token = Auth.getStoredToken();
     if (!token) {
+        Auth.clearAuthStorage();
         window.location.href = 'login.html';
         return;
     }
@@ -53,11 +54,7 @@ function checkAuthentication() {
 
 // Get authorization headers
 function getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-    };
+    return Auth.getAuthHeaders();
 }
 
 // Setup event listeners
@@ -359,10 +356,7 @@ async function deleteRule(ruleId) {
 
 // Logout
 function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    localStorage.removeItem('role');
-    localStorage.removeItem('userId');
+    Auth.clearAuthStorage();
     window.location.href = 'login.html';
 }
 

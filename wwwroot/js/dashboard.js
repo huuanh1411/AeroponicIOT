@@ -73,12 +73,14 @@ function bindNavigationButtons() {
     document.getElementById('devicesBtn')?.addEventListener('click', goToDevices);
     document.getElementById('cropsBtn')?.addEventListener('click', goToCrops);
     document.getElementById('healthBtn')?.addEventListener('click', goToHealth);
+    document.getElementById('usersBtn')?.addEventListener('click', goToUsers);
 }
 
 // Check if user is authenticated
 function checkAuthentication() {
-    const token = localStorage.getItem('token');
+    const token = Auth.getStoredToken();
     if (!token) {
+        Auth.clearAuthStorage();
         window.location.href = 'login.html';
         return;
     }
@@ -86,7 +88,13 @@ function checkAuthentication() {
     // Add user info to header
     const username = localStorage.getItem('username');
     const role = localStorage.getItem('role');
-    
+
+    const isAdmin = isAdministratorRole(role);
+    const usersBtn = document.getElementById('usersBtn');
+    if (usersBtn) {
+        usersBtn.hidden = !isAdmin;
+    }
+
     // Create user info element
     const headerControls = document.querySelector('.header-controls');
     const userInfo = document.createElement('div');
@@ -111,10 +119,15 @@ function checkAuthentication() {
             </div>
         </div>
         <span>${username} <small>(${role})</small></span>
+        ${isAdmin ? '<button id="usersAdminBtn" type="button" class="btn-secondary">👥 Người dùng</button>' : ''}
         <button id="profileBtn" class="btn-secondary">👤 Tài khoản</button>
         <button id="logoutBtn" class="btn-secondary">Đăng xuất</button>
     `;
     headerControls.appendChild(userInfo);
+
+    if (isAdmin) {
+        document.getElementById('usersAdminBtn')?.addEventListener('click', goToUsers);
+    }
     ensureProfileModal();
     
     // Load notifications
@@ -184,7 +197,7 @@ async function loadCurrentUserProfile() {
             throw new Error('Không thể tải thông tin tài khoản');
         }
 
-        const user = await response.json();
+        const user = Auth.unwrapApiData(await response.json());
         const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleString('vi-VN') : 'Không rõ';
         const lastLogin = user.lastLogin ? new Date(user.lastLogin).toLocaleString('vi-VN') : 'Chưa ghi nhận';
 
@@ -223,7 +236,7 @@ async function loadNotifications() {
         
         if (!response.ok) return;
         
-        const data = await response.json();
+        const data = Auth.unwrapApiData(await response.json());
         const badge = document.getElementById('notificationBadge');
         const notificationsList = document.getElementById('notificationsList');
         
@@ -328,20 +341,13 @@ function playNotificationSound() {
 
 // Logout function
 function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    localStorage.removeItem('role');
-    localStorage.removeItem('userId');
+    Auth.clearAuthStorage();
     window.location.href = 'login.html';
 }
 
 // Get authorization header with token
 function getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-    };
+    return Auth.getAuthHeaders();
 }
 
 // Event listeners
@@ -387,7 +393,10 @@ async function loadGardens() {
 
         if (!response.ok) throw new Error('Không thể tải danh sách khu vườn');
 
-        gardens = await response.json();
+        gardens = Auth.unwrapApiData(await response.json());
+        if (!Array.isArray(gardens)) {
+            gardens = [];
+        }
         renderGardenPills();
     } catch (error) {
         console.error('Error loading gardens:', error);
@@ -409,7 +418,10 @@ async function loadCrops() {
 
         if (!response.ok) throw new Error('Không thể tải danh sách cây trồng');
 
-        crops = await response.json();
+        crops = Auth.unwrapApiData(await response.json());
+        if (!Array.isArray(crops)) {
+            crops = [];
+        }
     } catch (error) {
         console.error('Error loading crops:', error);
     }
@@ -509,7 +521,7 @@ async function loadDashboardData() {
         
         if (!response.ok) throw new Error('Không thể tải dữ liệu bảng điều khiển');
 
-        const data = await response.json();
+        const data = Auth.unwrapApiData(await response.json());
         updateDashboard(data);
         updateLastUpdate();
     } catch (error) {
@@ -1141,4 +1153,12 @@ function goToCrops() {
 // Navigate to health page
 function goToHealth() {
     window.location.href = 'health.html';
+}
+
+function goToUsers() {
+    window.location.href = 'users.html';
+}
+
+function isAdministratorRole(role) {
+    return typeof role === 'string' && role.trim().toLowerCase() === 'administrator';
 }

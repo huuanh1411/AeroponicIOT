@@ -1,0 +1,176 @@
+@import url('./devices.css');
+
+#usersHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 2rem;
+    background: linear-gradient(135deg, #22c55e 0%, #166534 100%);
+    color: white;
+    font-size: 1.1rem;
+}
+
+#usersHeader small {
+    font-size: 0.8rem;
+    opacity: 0.9;
+    margin-left: 0.5rem;
+}
+
+#usersHeader button {
+    margin-left: 0.5rem;
+}
+
+#usersHeader .btn-secondary {
+    background: #8cd784;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+#usersHeader .btn-secondary:hover {
+    background: #79cc70;
+}
+
+.users-section {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.helper-text {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.message-box {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+}
+
+.message-box.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #28a745;
+}
+
+.message-box.error {
+    background: #ffe6e6;
+    color: #c0392b;
+    border: 1px solid #e74c3c;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.users-table th,
+.users-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.users-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+}
+
+.loading-cell {
+    text-align: center;
+    color: #888;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.role-badge.admin {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.role-badge.farmer {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.row-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.row-actions .btn-secondary,
+.row-actions .btn-danger {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.85rem;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.modal-username {
+    margin-bottom: 1rem;
+    color: #555;
+}
+
+#editUserModal .form-group {
+    margin-bottom: 1rem;
+}
+
+#editUserModal label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: 500;
+}
+
+#editUserModal input,
+#editUserModal select {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}

@@ -10,8 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function checkAuthentication() {
-    const token = localStorage.getItem('token');
+    const token = Auth.getStoredToken();
     if (!token) {
+        Auth.clearAuthStorage();
         window.location.href = 'login.html';
         return;
     }
@@ -41,11 +42,7 @@ function setupEventListeners() {
 }
 
 function getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-    };
+    return Auth.getAuthHeaders();
 }
 
 async function loadCrops() {
@@ -267,10 +264,7 @@ async function deleteCrop(cropId, cropName) {
 }
 
 function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    localStorage.removeItem('role');
-    localStorage.removeItem('userId');
+    Auth.clearAuthStorage();
     window.location.href = 'login.html';
 }
 

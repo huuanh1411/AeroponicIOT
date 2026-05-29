@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng điều khiển Smart Farm IoT</title>
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/dashboard.css?v=20260529">
 </head>
 <body>
     <header>
@@ -15,6 +15,7 @@
             <button id="automationBtn" class="btn-primary" onclick="goToAutomation()">⚙️ Tự động hóa</button>
             <button id="chartsBtn" class="btn-primary" onclick="goToCharts()">📊 Phân tích</button>
             <button id="healthBtn" class="btn-primary" onclick="goToHealth()">🩺 Sức khỏe hệ thống</button>
+            <button id="usersBtn" class="btn-primary" onclick="goToUsers()" hidden>👥 Người dùng</button>
             <button id="refreshBtn" class="btn-primary">Làm mới dữ liệu</button>
             <span id="lastUpdate">Cập nhật lần cuối: Chưa bao giờ</span>
         </div>
@@ -189,7 +190,6 @@
         </div>
     </div>
 
-    <script src="js/config.js"></script>
     <div id="gardenModal" class="modal">
         <div class="modal-content garden-modal-content">
             <span id="gardenModalClose" class="close">&times;</span>
@@ -211,6 +211,8 @@
             </form>
         </div>
     </div>
-    <script src="js/dashboard.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/dashboard.js?v=20260529"></script>
 </body>
 </html>
