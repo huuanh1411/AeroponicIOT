@@ -27,9 +27,67 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// Swagger / OpenAPI — single authoritative view of the entire API surface.
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "AeroponicIOT API",
+        Version = "v1",
+        Description = "REST API for the AeroponicIOT smart farming system — manages devices, sensors, actuators, crops, gardens, automation rules, and notifications. All endpoints return standardised `ApiResponse<T>` wrappers.",
+        Contact = new()
+        {
+            Name = "AeroponicIOT"
+        },
+        License = new()
+        {
+            Name = "MIT"
+        }
+    });
+
+    // Include XML doc comments from controller action summaries.
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+    {
+        options.IncludeXmlComments(xmlPath);
+    }
+
+    // JWT bearer token support in Swagger UI "Authorize" button.
+    // Enables the "Authorize" button so users can paste their JWT token
+    // and test authenticated endpoints directly from Swagger UI.
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Enter your JWT token"
+    });
+    // Add a global security requirement so all endpoints show the lock icon in Swagger UI.
+    options.AddSecurityRequirement(static document =>
+    {
+        var scheme = document.Components?.SecuritySchemes?.FirstOrDefault(s => s.Key == "Bearer").Value;
+        if (scheme == null) return new Microsoft.OpenApi.OpenApiSecurityRequirement();
+
+        // OpenApi v2.x: the requirement dictionary uses OpenApiSecuritySchemeReference keys.
+        var reference = new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer");
+        return new Microsoft.OpenApi.OpenApiSecurityRequirement { { reference, new List<string>() } };
+    });
+
+    // Group endpoints by controller name for a clean Swagger UI layout.
+    options.TagActionsBy(api =>
+    {
+        var controllerName = api.ActionDescriptor.RouteValues["controller"];
+        return new[] { controllerName ?? "General" };
+    });
+    options.OrderActionsBy(api => api.RelativePath ?? api.HttpMethod ?? "");
+});
+
+builder.Services.AddOpenApi();
 
 builder.Services.AddOptions<JwtSettingsOptions>()
     .Bind(builder.Configuration.GetSection("JwtSettings"))
@@ -302,7 +360,15 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "AeroponicIOT API v1");
+        options.RoutePrefix = "swagger";
+        options.DefaultModelExpandDepth(2);
+        options.DefaultModelsExpandDepth(-1);
+        options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
+        options.EnableTryItOutByDefault();
+    });
 }
 
 app.UseForwardedHeaders();

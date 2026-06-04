@@ -573,3 +573,4 @@ C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\n
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\AeroponicIOT.xml

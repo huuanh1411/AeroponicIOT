@@ -379,3 +379,5 @@ C:\Users\drago\Desktop\Studies\AeroponicIOT\.codex-build\bin\Debug\net10.0\runti
 C:\Users\drago\Desktop\Studies\AeroponicIOT\.codex-build\bin\Debug\net10.0\runtimes\win-x64\native\Microsoft.Data.SqlClient.SNI.dll
 C:\Users\drago\Desktop\Studies\AeroponicIOT\.codex-build\bin\Debug\net10.0\runtimes\win-x86\native\Microsoft.Data.SqlClient.SNI.dll
 C:\Users\drago\Desktop\Studies\AeroponicIOT\.codex-build\bin\Debug\net10.0\runtimes\win\lib\net9.0\System.Windows.Extensions.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\bin\Debug\net10.0\AeroponicIOT.xml
+C:\Users\drago\Desktop\Studies\AeroponicIOT\obj\Debug\net10.0\AeroponicIOT.xml

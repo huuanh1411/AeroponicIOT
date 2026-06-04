@@ -1,0 +1,679 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>AeroponicIOT</name>
+    </assembly>
+    <members>
+        <member name="M:AeroponicIOT.Controllers.ActuatorController.PublishActuatorCommandViamqtt(AeroponicIOT.Models.Device,AeroponicIOT.DTOs.ActuatorControlDto)">
+            <summary>
+            Publish actuator control command via MQTT
+            Topic: devices/{macAddress}/control
+            Payload: JSON with actuatorType and action
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AISuggestionController.AnalyzeDevice(System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Manually trigger an AI analysis for a specific device.
+            The suggestion will be delivered as a notification to the device owner.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AuthenticationController.Register(AeroponicIOT.DTOs.RegisterRequest)">
+            <summary>
+            Register a new user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AuthenticationController.Login(AeroponicIOT.DTOs.LoginRequest)">
+            <summary>
+            Login user and return JWT token
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AuthenticationController.GetCurrentUser">
+            <summary>
+            Get current user info (requires authentication)
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AuthenticationController.GenerateJwtToken(AeroponicIOT.Models.User)">
+            <summary>
+            Generate JWT token for user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.GetRules">
+            <summary>
+            Get all automation rules
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.GetRule(System.Int32)">
+            <summary>
+            Get rule by ID
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.CreateRule(AeroponicIOT.DTOs.CreateAutomationRuleDto)">
+            <summary>
+            Create a new automation rule
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.UpdateRule(System.Int32,AeroponicIOT.DTOs.UpdateAutomationRuleDto)">
+            <summary>
+            Update an automation rule
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.ToggleRule(System.Int32)">
+            <summary>
+            Toggle rule active status
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.DeleteRule(System.Int32)">
+            <summary>
+            Delete an automation rule
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.GetRulesByDevice(System.Int32)">
+            <summary>
+            Get rules by device
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.DebugController.CreateTestUser">
+            <summary>
+            Create a local development test user. Only works when ASPNETCORE_ENVIRONMENT=Development.
+            Returns the created username and password.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.MqttController.GetStatus">
+            <summary>
+            Check MQTT broker status
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.MqttController.PublishMessage(AeroponicIOT.Controllers.PublishRequest)">
+            <summary>
+            Publish a message to a topic (admin only)
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.NotificationController.GetEmailHealth(System.Boolean,System.Threading.CancellationToken)">
+            <summary>
+            Get email service health status (admin only)
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.NotificationController.GetUnreadNotifications">
+            <summary>
+            Get unread notifications for the current user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.NotificationController.MarkAsRead(System.Int32)">
+            <summary>
+            Mark a notification as read
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.NotificationController.ClearNotifications">
+            <summary>
+            Clear all notifications for the current user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.NotificationController.TestEmailNotification">
+            <summary>
+            Test email notification (admin only)
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.DTOs.LoginRequest">
+            <summary>
+            Request model for user login
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.DTOs.RegisterRequest">
+            <summary>
+            Request model for user registration
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.DTOs.TokenResponse">
+            <summary>
+            Response model containing JWT token and user information
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.DTOs.UserInfoDto">
+            <summary>
+            Response model for user info
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.DTOs.DeviceDto.ProtocolType">
+            <summary>Communication protocol: null / "wifi" for ESP32 nodes, "zigbee" for Zigbee2MQTT devices.</summary>
+        </member>
+        <member name="T:AeroponicIOT.Middleware.RequestLoggingMiddleware.__LogHttpRequestStruct">
+            <summary> This API supports the logging infrastructure and is not intended to be used directly from your code. It is subject to change in the future. </summary>
+        </member>
+        <member name="T:AeroponicIOT.Migrations.InitialCreate">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.InitialCreate.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.InitialCreate.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.InitialCreate.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.AddGardensAndLightSupport">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddGardensAndLightSupport.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddGardensAndLightSupport.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddGardensAndLightSupport.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.AddLogIndexes">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddLogIndexes.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddLogIndexes.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddLogIndexes.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.AddCropAssignedAt">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddCropAssignedAt.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddCropAssignedAt.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddCropAssignedAt.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.AddDeviceProvisioningFlow">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddDeviceProvisioningFlow.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddDeviceProvisioningFlow.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddDeviceProvisioningFlow.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.AddUniqueConstraintsAndFixDeviceUserFk">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddUniqueConstraintsAndFixDeviceUserFk.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddUniqueConstraintsAndFixDeviceUserFk.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddUniqueConstraintsAndFixDeviceUserFk.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.ConfigureDecimalPrecisionWarnings">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.ConfigureDecimalPrecisionWarnings.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.ConfigureDecimalPrecisionWarnings.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.ConfigureDecimalPrecisionWarnings.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.AddSensorRawPrecisionFields">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddSensorRawPrecisionFields.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddSensorRawPrecisionFields.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddSensorRawPrecisionFields.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:AeroponicIOT.Migrations.AddDeviceProtocolType">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddDeviceProtocolType.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddDeviceProtocolType.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Migrations.AddDeviceProtocolType.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="P:AeroponicIOT.Models.Device.ProtocolType">
+            <summary>Communication protocol: "wifi" (default) or "zigbee".</summary>
+        </member>
+        <member name="P:AeroponicIOT.Options.MqttSettingsOptions.EnableZigbee2MqttBridge">
+            <summary>
+            Enable the Zigbee2MQTT bridge integration. When true the broker
+            subscribes to <see cref="P:AeroponicIOT.Options.MqttSettingsOptions.Zigbee2MqttTopicPrefix"/>/ topics and
+            translates ZCL payloads into sensor readings.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Options.MqttSettingsOptions.Zigbee2MqttTopicPrefix">
+            <summary>
+            Root topic prefix that Zigbee2MQTT publishes to (default: "zigbee2mqtt").
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Options.MqttSettingsOptions.EnforceZigbeeTopicAcl">
+            <summary>
+            Whether to enforce ACL checks on Zigbee2MQTT topics.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Options.MqttSettingsOptions.ZigbeeBridgeUsername">
+            <summary>
+            Optional bridge MQTT username allowed to publish to Zigbee topics.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Options.MqttSettingsOptions.ZigbeeBridgeClientId">
+            <summary>
+            Optional bridge MQTT client id allowed to publish to Zigbee topics.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.AI.AIAnalysisBackgroundService">
+            <summary>
+            Background service that periodically analyzes recent sensor data across all devices
+            and generates AI-powered suggestions. This catches insights that might be missed
+            during real-time ingestion (e.g., gradual trends, cross-device patterns).
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.AI.AIOptions">
+            <summary>
+            Configuration options for the AI suggestion service.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.Enabled">
+            <summary>Whether the AI suggestion feature is enabled.</summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.Endpoint">
+            <summary>
+            The AI provider endpoint URL.
+            Supports any OpenAI-compatible API (e.g., OpenAI, Azure OpenAI, local LLM).
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.ApiKey">
+            <summary>API key for the AI provider.</summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.Model">
+            <summary>The model to use (e.g., gpt-4o-mini, gpt-4o, claude-sonnet-4-20250514).</summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.MaxTokens">
+            <summary>
+            Maximum tokens for the AI response.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.Temperature">
+            <summary>
+            Temperature for response creativity (0.0 = deterministic, 1.0 = creative).
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.CooldownMinutes">
+            <summary>
+            Only generate suggestions if no suggestion was made in the last N minutes
+            for the same device. Default: 60 minutes.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.SystemPromptOverride">
+            <summary>
+            Optional system prompt override. If empty, a default aeroponic expert prompt is used.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AIOptions.ProxyUrl">
+            <summary>
+            Optional proxy URL for the AI API calls.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.AI.AiSuggestionResult">
+            <summary>
+            Represents a suggestion generated by the AI analysis of sensor data.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AiSuggestionResult.Title">
+            <summary>A short, actionable title for the suggestion.</summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AiSuggestionResult.Message">
+            <summary>Detailed suggestion message with reasoning and actionable advice.</summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AiSuggestionResult.Type">
+            <summary>The notification severity level.</summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AiSuggestionResult.SuggestedAction">
+            <summary>
+            Optional suggested actuator action (e.g., "pump:ON", "light:OFF").
+            Can be parsed by the automation layer.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.AI.AiSuggestionResult.Confidence">
+            <summary>Confidence score 0-100.</summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.AI.AiSuggestionCacheEntry">
+            <summary>
+            Lightweight record stored to track the last AI suggestion per device (cooldown).
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.AI.AISuggestionService">
+            <summary>
+            Analyzes sensor data using an OpenAI-compatible AI API and returns actionable
+            aeroponic farming suggestions. Integrates with the notification system so that
+            suggestions are delivered to the device owner.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.AI.AISuggestionService.AnalyzeSensorDataAsync(System.Int32,System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:AeroponicIOT.Services.AI.AISuggestionService.BuildPrompt(AeroponicIOT.Models.Device,AeroponicIOT.Models.SensorLog,System.Collections.Generic.List{AeroponicIOT.Models.SensorLog},System.String)">
+            <summary>
+            Build the prompt sent to the AI model with context about the device and readings.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.AI.AISuggestionService.CallAiApiAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Call the OpenAI-compatible API and parse the structured response.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.AI.AISuggestionService.GetCurrentCropStage(AeroponicIOT.Models.Device)">
+            <summary>
+            Determine the current crop stage for the device.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.AI.AISuggestionService.BuildOptimalRangesDescription(AeroponicIOT.Models.CropStage)">
+            <summary>
+            Build a human-readable description of optimal ranges for the current stage.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.AI.AISuggestionService.GetCropAgeDays(AeroponicIOT.Models.Device)">
+            <summary>
+            Calculate days since crop was assigned to the device.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.AI.IAISuggestionService">
+            <summary>
+            Service that analyzes sensor data using an AI model and returns actionable
+            aeroponic farming suggestions that can be delivered as notifications.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.AI.IAISuggestionService.AnalyzeSensorDataAsync(System.Int32,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Analyze the latest sensor reading for a device and return an AI-generated suggestion.
+            Returns null if no actionable suggestion is needed or if AI is not configured.
+            </summary>
+            <param name="deviceId">The device identifier.</param>
+            <param name="macAddress">The device MAC address.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="T:AeroponicIOT.Services.Automation.AutomationBackgroundService">
+            <summary>
+            Background service that executes automation rules (schedule- and threshold-based)
+            and sends actuator commands via MQTT.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Automation.AutomationBackgroundService.ShouldExecuteTimerRule(AeroponicIOT.Models.AutomationRule,System.DateTime)">
+            <summary>
+            Timer (fixed-duration / pulse-style) rules.
+            These are treated as "fire every DurationMinutes" with a minimum 1-minute spacing,
+            regardless of sensor values.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Maintenance.LogRetentionBackgroundService">
+            <summary>
+            Periodically cleans up old sensor and actuator logs based on configured retention.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Mqtt.IMqttService">
+            <summary>
+            Interface for MQTT broker functionality
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.IMqttService.StartAsync">
+            <summary>
+            Start the MQTT broker
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.IMqttService.StopAsync">
+            <summary>
+            Stop the MQTT broker
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.IMqttService.PublishAsync(System.String,System.String,System.Boolean)">
+            <summary>
+            Publish a message to a topic
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.Mqtt.IMqttService.IsRunning">
+            <summary>
+            Check if the broker is running
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.Mqtt.IMqttService.IsZigbeeBridgeReady">
+            <summary>
+            Indicates whether Zigbee bridge readiness requirements are satisfied.
+            Returns true when Zigbee bridging is disabled, ACL is disabled, or the
+            configured bridge identity has authenticated at least once since startup.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.Mqtt.IMqttService.ZigbeeBridgeReadinessMessage">
+            <summary>
+            Provides a human-readable readiness status for Zigbee bridge integration.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Mqtt.MqttService">
+            <summary>
+            MQTT broker service for device communication
+            Handles device connections, subscriptions, and message publishing
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.MqttService.StartAsync">
+            <summary>
+            Start the MQTT broker on the configured port
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.MqttService.StopAsync">
+            <summary>
+            Stop the MQTT broker
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.MqttService.PublishAsync(System.String,System.String,System.Boolean)">
+            <summary>
+            Publish a message to a specific topic
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.MqttService.HandleZigbee2MqttMessageAsync(System.String,System.String,System.String)">
+            <summary>
+            Full Zigbee2MQTT message handler that receives the decoded JSON string.
+            Called from <see cref="M:AeroponicIOT.Services.Mqtt.MqttService.OnInterceptingPublishAsync(MQTTnet.Server.InterceptingPublishEventArgs)"/> once bytes are read.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.MqttService.HandleZigbeeBridgeEventAsync(System.String)">
+            <summary>
+            Auto-provisions a new Zigbee device as a <see cref="T:AeroponicIOT.Models.Device"/> record with
+            <c>ProtocolType = "zigbee"</c> and <c>Status = Pending</c> when it joins
+            the coordinator for the first time.  A user can then claim it from the
+            dashboard using the standard claim flow.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Mqtt.ZigbeePayloadMapper">
+             <summary>
+             Translates Zigbee2MQTT ZCL-derived JSON payloads into the internal
+             <see cref="T:AeroponicIOT.DTOs.SensorDataDto"/> format used by the sensor ingestion pipeline.
+            
+             Zigbee2MQTT uses standard ZCL cluster attribute names (e.g. "temperature",
+             "humidity", "illuminance_lux") which differ from the ESP32 firmware JSON
+             keys ("waterTemperature", "airHumidity", "lightIntensity"). This mapper
+             normalises both naming conventions to a single DTO.
+            
+             When Zigbee2MQTT is configured with
+             <c>advanced.include_device_information: true</c> every telemetry message
+             contains an <c>ieee_address</c> field (e.g. "0x00124b0014d9b021") which is
+             the stable hardware EUI-64 identifier. The mapper uses it as the canonical
+             <see cref="P:AeroponicIOT.DTOs.SensorDataDto.MacAddress"/> value (uppercased) so lookups against
+             Device.MacAddress stored during auto-provisioning succeed. When the field is
+             absent the Zigbee2MQTT friendly name is used as a fallback.
+            
+             Non-standard ZCL fields (ph, tds) are also accepted for custom Zigbee
+             water-quality probes that expose them via manufacturer-specific clusters.
+             </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Mqtt.ZigbeePayloadMapper.TryMap(System.String,System.String,System.String[]@)">
+            <summary>
+            Attempts to map a Zigbee2MQTT device payload to a <see cref="T:AeroponicIOT.DTOs.SensorDataDto"/>.
+            </summary>
+            <param name="friendlyName">
+            The Zigbee2MQTT friendly name extracted from the MQTT topic. Used as
+            the device identifier only when the payload contains no
+            <c>ieee_address</c> (i.e. <c>include_device_information</c> is off).
+            </param>
+            <param name="json">Raw JSON payload published by Zigbee2MQTT.</param>
+            <returns>
+            A populated <see cref="T:AeroponicIOT.DTOs.SensorDataDto"/> when at least one known sensor
+            field was present; <c>null</c> otherwise (e.g. link-quality-only frames).
+            </returns>
+        </member>
+        <member name="T:AeroponicIOT.Services.Notifications.EmailService">
+            <summary>
+            Email service implementation using MailKit/SMTP
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Notifications.IEmailService">
+            <summary>
+            Interface for email sending functionality
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.IEmailService.SendEmailAsync(System.String,System.String,System.String,System.String)">
+            <summary>
+            Send an email
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.IEmailService.SendBulkEmailAsync(System.Collections.Generic.List{System.String},System.String,System.String,System.String)">
+            <summary>
+            Send an email to multiple recipients
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.IEmailService.CheckHealthAsync(System.Boolean,System.Threading.CancellationToken)">
+            <summary>
+            Check SMTP configuration and optionally test connectivity/authentication.
+            </summary>
+        </member>
+        <member name="P:AeroponicIOT.Services.Notifications.IEmailService.IsConfigured">
+            <summary>
+            Check if email service is configured
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Notifications.INotificationService">
+            <summary>
+            Interface for sending notifications to users
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.INotificationService.SendNotificationAsync(System.Int32,System.String,System.String,AeroponicIOT.Services.Notifications.NotificationType)">
+            <summary>
+            Send a notification to a user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.INotificationService.SendAlertNotificationAsync(System.Int32,System.String,System.String,System.String)">
+            <summary>
+            Send an alert notification
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.INotificationService.GetUnreadNotificationsAsync(System.Int32)">
+            <summary>
+            Get unread notifications for a user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.INotificationService.MarkAsReadAsync(System.Int32,System.Int32)">
+            <summary>
+            Mark notification as read (only if it belongs to the user)
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.INotificationService.ClearNotificationsAsync(System.Int32)">
+            <summary>
+            Clear all notifications for a user
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Notifications.NotificationService">
+            <summary>
+            Notification service for sending notifications to users via multiple channels
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.NotificationService.SendNotificationAsync(System.Int32,System.String,System.String,AeroponicIOT.Services.Notifications.NotificationType)">
+            <summary>
+            Send a notification to a user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.NotificationService.SendAlertNotificationAsync(System.Int32,System.String,System.String,System.String)">
+            <summary>
+            Send an alert notification when sensor values exceed thresholds
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.NotificationService.GetUnreadNotificationsAsync(System.Int32)">
+            <summary>
+            Get unread notifications for a user
+            </summary>
+        </member>
+        <!-- Badly formed XML comment ignored for member "M:AeroponicIOT.Services.Notifications.NotificationService.MarkAsReadAsync(System.Int32,System.Int32)" -->
+        <member name="M:AeroponicIOT.Services.Notifications.NotificationService.ClearNotificationsAsync(System.Int32)">
+            <summary>
+            Clear all notifications for a user
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Notifications.NotificationService.GenerateEmailHtml(System.String,System.String,AeroponicIOT.Services.Notifications.NotificationType)">
+            <summary>
+            Generate HTML email body
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Sensors.SensorIngestionService">
+            <summary>
+            Centralized service for ingesting sensor data regardless of transport (HTTP, MQTT, etc.).
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Type)">
+            <summary>
+            Generates a documentation comment ID for a type.
+            Example: T:Namespace.Outer+Inner`1 becomes T:Namespace.Outer.Inner`1
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Reflection.PropertyInfo)">
+            <summary>
+            Generates a documentation comment ID for a property.
+            Example: P:Namespace.ContainingType.PropertyName or for an indexer P:Namespace.ContainingType.Item(System.Int32)
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Type,System.String)">
+            <summary>
+            Generates a documentation comment ID for a property given its container type and property name.
+            Example: P:Namespace.ContainingType.PropertyName
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Reflection.MethodInfo)">
+            <summary>
+            Generates a documentation comment ID for a method (or constructor).
+            For example:
+              M:Namespace.ContainingType.MethodName(ParamType1,ParamType2)~ReturnType
+              M:Namespace.ContainingType.#ctor(ParamType)
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.GetTypeDocId(System.Type,System.Boolean,System.Boolean)">
+            <summary>
+            Generates a documentation ID string for a type.
+            This method handles nested types (replacing '+' with '.'),
+            generic types, arrays, pointers, by-ref types, and generic parameters.
+            The <paramref name="includeGenericArguments"/> flag controls whether
+            constructed generic type arguments are emitted, while <paramref name="omitGenericArity"/>
+            controls whether the generic arity marker (e.g. "`1") is appended.
+            </summary>
+        </member>
+        <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.NormalizeDocId(System.String)">
+            <summary>
+            Normalizes a documentation comment ID to match the compiler-style format.
+            Strips the return type suffix for ordinary methods but retains it for conversion operators.
+            </summary>
+            <param name="docId">The documentation comment ID to normalize.</param>
+            <returns>The normalized documentation comment ID.</returns>
+        </member>
+    </members>
+</doc>
