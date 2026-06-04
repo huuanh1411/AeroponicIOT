@@ -570,3 +570,6 @@ C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\n
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\Pipelines.Sockets.Unofficial.dll
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\StackExchange.Redis.dll
 C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\docs\observability\grafana-aeroponiciot-performance.json
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
+C:\Users\drago\Desktop\Studies\AeroponicIOT\tests\AeroponicIOT.Tests\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll

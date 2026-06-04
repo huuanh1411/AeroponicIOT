@@ -2,6 +2,7 @@ using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Exceptions;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.AI;
 using AeroponicIOT.Services.Notifications;
 using AeroponicIOT.Services.Security;
 using Microsoft.EntityFrameworkCore;
@@ -15,15 +16,18 @@ public class SensorIngestionService : ISensorIngestionService
 {
     private readonly ApplicationDbContext _context;
     private readonly INotificationService _notificationService;
+    private readonly IAISuggestionService _aiSuggestionService;
     private readonly ILogger<SensorIngestionService> _logger;
 
     public SensorIngestionService(
         ApplicationDbContext context,
         INotificationService notificationService,
+        IAISuggestionService aiSuggestionService,
         ILogger<SensorIngestionService> logger)
     {
         _context = context;
         _notificationService = notificationService;
+        _aiSuggestionService = aiSuggestionService;
         _logger = logger;
     }
 
@@ -100,6 +104,20 @@ public class SensorIngestionService : ISensorIngestionService
                     alert.Id);
             }
         }
+
+        // Fire-and-forget AI analysis to generate actionable suggestions.
+        // Runs in the background so sensor ingestion latency is not affected.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _aiSuggestionService.AnalyzeSensorDataAsync(device.Id, normalizedMac);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AI suggestion analysis failed for device {DeviceId}", device.Id);
+            }
+        });
 
         _logger.LogInformation("Sensor data ingested for device {DeviceName} ({MacAddress})",
             device.Name ?? "Unknown", device.MacAddress ?? "Unknown");

@@ -1,6 +1,7 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.AI;
 using AeroponicIOT.Services.Notifications;
 using AeroponicIOT.Services.Sensors;
 using Microsoft.EntityFrameworkCore;
@@ -64,9 +65,11 @@ public class SensorIngestionReliabilityTests
         await dbContext.SaveChangesAsync();
 
         var notificationService = new ThrowingNotificationService();
+        var aiSuggestionService = new NoopAISuggestionService();
         var ingestionService = new SensorIngestionService(
             dbContext,
             notificationService,
+            aiSuggestionService,
             NullLogger<SensorIngestionService>.Instance);
 
         var payload = new SensorDataDto
@@ -100,5 +103,11 @@ public class SensorIngestionReliabilityTests
 
         public Task ClearNotificationsAsync(int userId)
             => Task.CompletedTask;
+    }
+
+    private sealed class NoopAISuggestionService : IAISuggestionService
+    {
+        public Task<AiSuggestionResult?> AnalyzeSensorDataAsync(int deviceId, string macAddress, CancellationToken cancellationToken = default)
+            => Task.FromResult<AiSuggestionResult?>(null);
     }
 }

@@ -1,5 +1,6 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.AI;
 using AeroponicIOT.Services.Automation;
 using AeroponicIOT.Services.Mqtt;
 using AeroponicIOT.Services.Notifications;
@@ -27,6 +28,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 builder.Services.AddOptions<JwtSettingsOptions>()
     .Bind(builder.Configuration.GetSection("JwtSettings"))
@@ -195,6 +198,14 @@ else
 
 builder.Services.AddScoped<IOnboardingAttemptTracker, DistributedOnboardingAttemptTracker>();
 builder.Services.AddHttpContextAccessor();
+
+// HTTP client for AI suggestion API calls
+builder.Services.AddHttpClient("ai-proxy")
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        // Respect proxy settings if configured via environment variables.
+        UseProxy = true
+    });
 builder.Services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
 
 builder.Services.AddHealthChecks()
@@ -254,7 +265,8 @@ builder.Services.AddOpenTelemetry()
 
 // Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
 
 // Add MQTT Service
 builder.Services.AddSingleton<IMqttService, MqttService>();
@@ -262,6 +274,14 @@ builder.Services.AddSingleton<IMqttService, MqttService>();
 // Add Notification Services
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// AI Suggestion Service
+builder.Services.AddOptions<AIOptions>()
+    .Bind(builder.Configuration.GetSection("AISuggestions"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddScoped<IAISuggestionService, AISuggestionService>();
+builder.Services.AddHostedService<AIAnalysisBackgroundService>();
 
 // Sensor ingestion (shared by HTTP and MQTT)
 builder.Services.AddScoped<ISensorIngestionService, SensorIngestionService>();
@@ -281,6 +301,8 @@ var failFastOnInitializationError = builder.Configuration.GetValue<bool?>("Start
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseForwardedHeaders();
