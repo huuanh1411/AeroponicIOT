@@ -11,12 +11,6 @@
             Payload: JSON with actuatorType and action
             </summary>
         </member>
-        <member name="M:AeroponicIOT.Controllers.AISuggestionController.AnalyzeDevice(System.Int32,System.Threading.CancellationToken)">
-            <summary>
-            Manually trigger an AI analysis for a specific device.
-            The suggestion will be delivered as a notification to the device owner.
-            </summary>
-        </member>
         <member name="M:AeroponicIOT.Controllers.AuthenticationController.Register(AeroponicIOT.DTOs.RegisterRequest)">
             <summary>
             Register a new user
@@ -70,6 +64,12 @@
         <member name="M:AeroponicIOT.Controllers.AutomationController.GetRulesByDevice(System.Int32)">
             <summary>
             Get rules by device
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Controllers.AutomationController.AnalyzeDevice(System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Manually trigger an AI analysis for a specific device (admin only).
+            The suggestion will be delivered as a notification to the device owner.
             </summary>
         </member>
         <member name="M:AeroponicIOT.Controllers.DebugController.CreateTestUser">
@@ -135,6 +135,17 @@
         </member>
         <member name="P:AeroponicIOT.DTOs.DeviceDto.ProtocolType">
             <summary>Communication protocol: null / "wifi" for ESP32 nodes, "zigbee" for Zigbee2MQTT devices.</summary>
+        </member>
+        <member name="T:AeroponicIOT.Endpoints.HealthCheckEndpoints">
+            <summary>
+            Health check endpoints for Kubernetes/container orchestration
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Middleware.HangfireAuthorizationFilter">
+            <summary>
+            Hangfire Dashboard authorization filter — restricts access to admin users only.
+            In development, allows all. In production, requires admin role.
+            </summary>
         </member>
         <member name="T:AeroponicIOT.Middleware.RequestLoggingMiddleware.__LogHttpRequestStruct">
             <summary> This API supports the logging infrastructure and is not intended to be used directly from your code. It is subject to change in the future. </summary>
@@ -421,6 +432,50 @@
             regardless of sensor values.
             </summary>
         </member>
+        <member name="T:AeroponicIOT.Services.BackgroundJobs.AIAnalysisJob">
+            <summary>
+            Background job for AI analysis without blocking sensor ingestion.
+            Persisted in SQL Server, automatically retried on failure.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.BackgroundJobs.AlertNotificationJob">
+            <summary>
+            Background job for sending alert notifications without blocking sensor ingestion.
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Caching.ICacheService">
+            <summary>
+            Cache abstraction for distributed caching (Redis)
+            Provides get/set operations with TTL support
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Caching.ICacheService.GetAsync``1(System.String)">
+            <summary>Get a cached value by key (null if not found)</summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Caching.ICacheService.SetAsync``1(System.String,``0,System.Nullable{System.TimeSpan})">
+            <summary>Set a cached value with TTL</summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Caching.ICacheService.RemoveAsync(System.String)">
+            <summary>Remove a cached value by key</summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Caching.ICacheService.RemoveByPatternAsync(System.String)">
+            <summary>Remove all cached values matching a pattern</summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Caching.ICacheService.ExistsAsync(System.String)">
+            <summary>Check if a key exists in cache</summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Caching.NoCacheService">
+            <summary>
+            No-op cache service for development/fallback when Redis unavailable
+            All operations complete silently without caching
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Caching.RedisCacheService">
+            <summary>
+            Redis-backed distributed cache service
+            Enables sharing cached data across multiple API instances
+            </summary>
+        </member>
         <member name="T:AeroponicIOT.Services.Maintenance.LogRetentionBackgroundService">
             <summary>
             Periodically cleans up old sensor and actuator logs based on configured retention.
@@ -465,37 +520,23 @@
         </member>
         <member name="T:AeroponicIOT.Services.Mqtt.MqttService">
             <summary>
-            MQTT broker service for device communication
-            Handles device connections, subscriptions, and message publishing
+            MQTT client service for connecting to external MQTT broker (EMQX)
+            Handles device subscriptions, message publishing, and sensor data ingestion
             </summary>
         </member>
         <member name="M:AeroponicIOT.Services.Mqtt.MqttService.StartAsync">
             <summary>
-            Start the MQTT broker on the configured port
+            Connect to external MQTT broker (EMQX)
             </summary>
         </member>
         <member name="M:AeroponicIOT.Services.Mqtt.MqttService.StopAsync">
             <summary>
-            Stop the MQTT broker
+            Disconnect from the MQTT broker
             </summary>
         </member>
         <member name="M:AeroponicIOT.Services.Mqtt.MqttService.PublishAsync(System.String,System.String,System.Boolean)">
             <summary>
             Publish a message to a specific topic
-            </summary>
-        </member>
-        <member name="M:AeroponicIOT.Services.Mqtt.MqttService.HandleZigbee2MqttMessageAsync(System.String,System.String,System.String)">
-            <summary>
-            Full Zigbee2MQTT message handler that receives the decoded JSON string.
-            Called from <see cref="M:AeroponicIOT.Services.Mqtt.MqttService.OnInterceptingPublishAsync(MQTTnet.Server.InterceptingPublishEventArgs)"/> once bytes are read.
-            </summary>
-        </member>
-        <member name="M:AeroponicIOT.Services.Mqtt.MqttService.HandleZigbeeBridgeEventAsync(System.String)">
-            <summary>
-            Auto-provisions a new Zigbee device as a <see cref="T:AeroponicIOT.Models.Device"/> record with
-            <c>ProtocolType = "zigbee"</c> and <c>Status = Pending</c> when it joins
-            the coordinator for the first time.  A user can then claim it from the
-            dashboard using the standard claim flow.
             </summary>
         </member>
         <member name="T:AeroponicIOT.Services.Mqtt.ZigbeePayloadMapper">
@@ -626,9 +667,35 @@
             Generate HTML email body
             </summary>
         </member>
+        <member name="T:AeroponicIOT.Services.Security.IResourceOwnershipService">
+            <summary>
+            Centralized service for checking resource ownership and authorization.
+            Eliminates repeated ownership checks across controllers.
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Security.IResourceOwnershipService.CanAccessDevice(AeroponicIOT.Models.Device,AeroponicIOT.Services.Security.CurrentUserContext)">
+            <summary>
+            Check if current user can access a device (owns it or is admin).
+            </summary>
+            <returns>true if authorized; false otherwise</returns>
+        </member>
+        <member name="M:AeroponicIOT.Services.Security.IResourceOwnershipService.CanAccessAutomationRule(AeroponicIOT.Models.AutomationRule,AeroponicIOT.Services.Security.CurrentUserContext)">
+            <summary>
+            Check if current user can access an automation rule (owns the device or is admin).
+            </summary>
+        </member>
+        <member name="M:AeroponicIOT.Services.Security.IResourceOwnershipService.CanAccessGarden(AeroponicIOT.Models.Garden,AeroponicIOT.Services.Security.CurrentUserContext)">
+            <summary>
+            Check if current user can access a garden (owns any device in it or is admin).
+            </summary>
+        </member>
+        <member name="T:AeroponicIOT.Services.Security.ResourceOwnershipService">
+            <inheritdoc />
+        </member>
         <member name="T:AeroponicIOT.Services.Sensors.SensorIngestionService">
             <summary>
             Centralized service for ingesting sensor data regardless of transport (HTTP, MQTT, etc.).
+            Uses Hangfire for background job processing (alerts, AI analysis).
             </summary>
         </member>
         <member name="M:Microsoft.AspNetCore.OpenApi.Generated.DocumentationCommentIdHelper.CreateDocumentationId(System.Type)">

@@ -1,6 +1,7 @@
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.Caching;
 using AeroponicIOT.Services.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,15 +17,19 @@ public class DashboardController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly ILogger<DashboardController> _logger;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICacheService _cacheService;
+    private const int DashboardCacheTtlMinutes = 5;
 
     public DashboardController(
         ApplicationDbContext context,
         ILogger<DashboardController> logger,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ICacheService cacheService)
     {
         _context = context;
         _logger = logger;
         _currentUserService = currentUserService;
+        _cacheService = cacheService;
     }
 
     [HttpGet("latest")]
@@ -36,6 +41,17 @@ public class DashboardController : ControllerBase
             pageSize = Math.Clamp(pageSize, 1, 200);
 
             var currentUser = _currentUserService.GetCurrentUser();
+
+            // Generate cache key
+            var cacheKey = $"dashboard:user:{currentUser.UserId}:garden:{gardenId}:page:{page}";
+
+            // Try to get from cache
+            var cachedDashboard = await _cacheService.GetAsync<DashboardDto>(cacheKey);
+            if (cachedDashboard != null)
+            {
+                _logger.LogDebug("Dashboard cache hit for key: {CacheKey}", cacheKey);
+                return Ok(ApiResponse.Success(cachedDashboard, "Dashboard data retrieved (cached)"));
+            }
 
             IQueryable<Device> devicesQuery;
             if (currentUser.IsAdministrator)
@@ -191,6 +207,9 @@ public class DashboardController : ControllerBase
                 TotalDevices = totalDevices,
                 ActiveDevices = activeDevicesCount
             };
+
+            // Cache the dashboard data
+            await _cacheService.SetAsync(cacheKey, dashboard, TimeSpan.FromMinutes(DashboardCacheTtlMinutes));
 
             return Ok(ApiResponse.Success(dashboard, "Dashboard data retrieved"));
         }

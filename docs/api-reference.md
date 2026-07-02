@@ -13,7 +13,7 @@
 |---|-----------|--------|
 | 1 | [Authentication](#1-authentication) | `POST /api/authentication/*` |
 | 2 | [Actuator](#2-actuator) | `api/actuator/*` |
-| 3 | [AI Suggestion](#3-ai-suggestion) | `api/aisuggestion/*` |
+| 3 | [AI Suggestion (via Automation)](#3-ai-suggestion) | `api/automation/analyze/*` |
 | 4 | [Automation](#4-automation) | `api/automation/*` |
 | 5 | [Crop](#5-crop) | `api/crop/*` |
 | 6 | [Dashboard](#6-dashboard) | `api/dashboard/*` |
@@ -140,10 +140,10 @@ Get actuator logs for a device.
 
 ## 3. AI Suggestion
 
-**Prefix:** `api/aisuggestion`  
+**Prefix:** `api/automation` (merged into Automation controller)  
 **Auth:** `[Authorize(Policy = "AdminOnly")]`
 
-### `POST /api/aisuggestion/analyze/{deviceId}`
+### `POST /api/automation/analyze/{deviceId}`
 
 Manually trigger an AI analysis of the latest sensor data for a device. The resulting suggestion is delivered as a notification to the device owner.
 

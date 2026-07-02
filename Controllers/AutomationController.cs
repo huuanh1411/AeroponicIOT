@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
+using AeroponicIOT.Services.AI;
 using AeroponicIOT.Services.Security;
 
 namespace AeroponicIOT.Controllers;
@@ -16,15 +17,21 @@ public class AutomationController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly ILogger<AutomationController> _logger;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IAISuggestionService _aiSuggestionService;
+    private readonly IResourceOwnershipService _resourceOwnership;
 
     public AutomationController(
         ApplicationDbContext context,
         ILogger<AutomationController> logger,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IAISuggestionService aiSuggestionService,
+        IResourceOwnershipService resourceOwnership)
     {
         _context = context;
         _logger = logger;
         _currentUserService = currentUserService;
+        _aiSuggestionService = aiSuggestionService;
+        _resourceOwnership = resourceOwnership;
     }
 
     /// <summary>
@@ -43,7 +50,8 @@ public class AutomationController : ControllerBase
                 if (!currentUser.UserId.HasValue)
                     return ApiProblem(StatusCodes.Status401Unauthorized, "Unauthorized", "User not authenticated");
 
-                query = query.Where(r => r.Device != null && r.Device.UserId == currentUser.UserId.Value);
+                var userId = currentUser.UserId.Value;
+                query = query.Where(r => r.Device != null && r.Device.UserId == userId);
             }
 
             var rules = await query.OrderByDescending(r => r.IsActive)
@@ -74,14 +82,8 @@ public class AutomationController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
-            {
-                if (!currentUser.UserId.HasValue || rule.Device == null || rule.Device.UserId != currentUser.UserId.Value)
-                {
-                    return Forbid();
-                }
-            }
+            if (!_resourceOwnership.CanAccessAutomationRule(rule, currentUser))
+                return Forbid();
 
             return Ok(ApiResponse.Success(rule, "Automation rule retrieved"));
         }
@@ -103,18 +105,13 @@ public class AutomationController : ControllerBase
             if (!ModelState.IsValid)
                 return ValidationProblem(ModelState);
 
-            // Validate device exists
             var device = await _context.Devices.FindAsync(request.DeviceId);
             if (device == null)
                 return ApiProblem(StatusCodes.Status400BadRequest, "Bad Request", "Device not found");
 
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
-            {
-                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
-                    return Forbid();
-            }
+            if (!_resourceOwnership.CanAccessDevice(device, currentUser))
+                return Forbid();
 
             var rule = new AutomationRule
             {
@@ -133,8 +130,6 @@ public class AutomationController : ControllerBase
                 IsActive = request.IsActive,
                 CreatedAt = DateTime.UtcNow
             };
-
-            rule.CreatedAt = DateTime.UtcNow;
 
             _context.AutomationRules.Add(rule);
             await _context.SaveChangesAsync();
@@ -159,18 +154,13 @@ public class AutomationController : ControllerBase
     {
         try
         {
-            var rule = await _context.AutomationRules.FindAsync(id);
+            var rule = await _context.AutomationRules.Include(r => r.Device).FirstOrDefaultAsync(r => r.Id == id);
             if (rule == null)
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
-            var device = await _context.Devices.FindAsync(rule.DeviceId);
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
-            {
-                if (!currentUser.UserId.HasValue || device == null || device.UserId != currentUser.UserId.Value)
-                    return Forbid();
-            }
+            if (!_resourceOwnership.CanAccessAutomationRule(rule, currentUser))
+                return Forbid();
 
             rule.RuleName = updatedRule.RuleName;
             rule.RuleType = updatedRule.RuleType;
@@ -205,18 +195,13 @@ public class AutomationController : ControllerBase
     {
         try
         {
-            var rule = await _context.AutomationRules.FindAsync(id);
+            var rule = await _context.AutomationRules.Include(r => r.Device).FirstOrDefaultAsync(r => r.Id == id);
             if (rule == null)
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
-            var device = await _context.Devices.FindAsync(rule.DeviceId);
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
-            {
-                if (!currentUser.UserId.HasValue || device == null || device.UserId != currentUser.UserId.Value)
-                    return Forbid();
-            }
+            if (!_resourceOwnership.CanAccessAutomationRule(rule, currentUser))
+                return Forbid();
 
             rule.IsActive = !rule.IsActive;
             _context.AutomationRules.Update(rule);
@@ -240,18 +225,13 @@ public class AutomationController : ControllerBase
     {
         try
         {
-            var rule = await _context.AutomationRules.FindAsync(id);
+            var rule = await _context.AutomationRules.Include(r => r.Device).FirstOrDefaultAsync(r => r.Id == id);
             if (rule == null)
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Rule not found");
 
-            var device = await _context.Devices.FindAsync(rule.DeviceId);
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
-            {
-                if (!currentUser.UserId.HasValue || device == null || device.UserId != currentUser.UserId.Value)
-                    return Forbid();
-            }
+            if (!_resourceOwnership.CanAccessAutomationRule(rule, currentUser))
+                return Forbid();
 
             _context.AutomationRules.Remove(rule);
             await _context.SaveChangesAsync();
@@ -279,12 +259,8 @@ public class AutomationController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
-            {
-                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
-                    return Forbid();
-            }
+            if (!_resourceOwnership.CanAccessDevice(device, currentUser))
+                return Forbid();
 
             var rules = await _context.AutomationRules
                 .Where(r => r.DeviceId == deviceId)
@@ -303,5 +279,29 @@ public class AutomationController : ControllerBase
     private ObjectResult ApiProblem(int statusCode, string title, string detail)
     {
         return ProblemResponseFactory.Create(this, statusCode, title, detail);
+    }
+
+    /// <summary>
+    /// Manually trigger an AI analysis for a specific device (admin only).
+    /// The suggestion will be delivered as a notification to the device owner.
+    /// </summary>
+    [HttpPost("analyze/{deviceId}")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> AnalyzeDevice(int deviceId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _aiSuggestionService.AnalyzeSensorDataAsync(deviceId, string.Empty, cancellationToken);
+
+            if (result == null)
+                return Ok(ApiResponse.Success<object?>(null, "AI analysis completed — no actionable suggestion at this time"));
+
+            return Ok(ApiResponse.Success(result, "AI analysis complete — suggestion has been sent as notification"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error triggering AI analysis for device {DeviceId}", deviceId);
+            return ApiProblem(StatusCodes.Status500InternalServerError, "Internal Server Error", "Error during AI analysis");
+        }
     }
 }

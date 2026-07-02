@@ -3,31 +3,31 @@ using AeroponicIOT.DTOs;
 using AeroponicIOT.Exceptions;
 using AeroponicIOT.Models;
 using AeroponicIOT.Services.AI;
+using AeroponicIOT.Services.BackgroundJobs;
 using AeroponicIOT.Services.Notifications;
 using AeroponicIOT.Services.Security;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 
 namespace AeroponicIOT.Services.Sensors;
 
 /// <summary>
 /// Centralized service for ingesting sensor data regardless of transport (HTTP, MQTT, etc.).
+/// Uses Hangfire for background job processing (alerts, AI analysis).
 /// </summary>
 public class SensorIngestionService : ISensorIngestionService
 {
     private readonly ApplicationDbContext _context;
-    private readonly INotificationService _notificationService;
-    private readonly IAISuggestionService _aiSuggestionService;
+    private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly ILogger<SensorIngestionService> _logger;
 
     public SensorIngestionService(
         ApplicationDbContext context,
-        INotificationService notificationService,
-        IAISuggestionService aiSuggestionService,
+        IBackgroundJobClient backgroundJobClient,
         ILogger<SensorIngestionService> logger)
     {
         _context = context;
-        _notificationService = notificationService;
-        _aiSuggestionService = aiSuggestionService;
+        _backgroundJobClient = backgroundJobClient;
         _logger = logger;
     }
 
@@ -85,42 +85,23 @@ public class SensorIngestionService : ISensorIngestionService
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        // Queue alert notifications as background jobs (non-blocking)
         foreach (var alert in alerts)
         {
-            try
-            {
-                await _notificationService.SendAlertNotificationAsync(
+            _backgroundJobClient.Enqueue<AlertNotificationJob>(job =>
+                job.SendAlertAsync(
                     device.Id,
                     alert.Message ?? "Alert",
                     alert.Message ?? "An alert has been triggered",
-                    alert.Severity ?? "Medium");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to dispatch alert notification for device {DeviceId} alert {AlertId}",
-                    device.Id,
-                    alert.Id);
-            }
+                    alert.Severity ?? "Medium"));
         }
 
-        // Fire-and-forget AI analysis to generate actionable suggestions.
-        // Runs in the background so sensor ingestion latency is not affected.
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _aiSuggestionService.AnalyzeSensorDataAsync(device.Id, normalizedMac);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "AI suggestion analysis failed for device {DeviceId}", device.Id);
-            }
-        });
+        // Queue AI analysis as background job (non-blocking, persistent, retryable)
+        _backgroundJobClient.Enqueue<AIAnalysisJob>(job =>
+            job.AnalyzeDeviceAsync(device.Id, normalizedMac, CancellationToken.None));
 
-        _logger.LogInformation("Sensor data ingested for device {DeviceName} ({MacAddress})",
-            device.Name ?? "Unknown", device.MacAddress ?? "Unknown");
+        _logger.LogInformation("Sensor data ingested for device {DeviceName} ({MacAddress}) — {AlertCount} alerts queued, AI analysis queued",
+            device.Name ?? "Unknown", device.MacAddress ?? "Unknown", alerts.Count);
     }
 
     private void SanitizeOutOfRangeValues(SensorDataDto sensorData, string normalizedMac)

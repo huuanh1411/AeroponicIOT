@@ -1,0 +1,53 @@
+services:
+
+  app:
+    container_name: aeroponiciot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5062:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Database=AeroponicIOT;User Id=sa;Password=AeroponicIOT_DB_P@ss123;TrustServerCertificate=True;MultipleActiveResultSets=True
+      - Redis__Configuration=
+      - JwtSettings__SecretKey=local-dev-secret-key-change-in-production
+      - JwtSettings__Issuer=AeroponicIOT
+      - JwtSettings__Audience=AeroponicIOT
+      - JwtSettings__ExpirationMinutes=1440
+      - MqttSettings__Host=localhost
+      - MqttSettings__Port=1883
+      - MqttSettings__Username=admin
+      - MqttSettings__Password=public
+      - MqttSettings__RequireClientAuthentication=false
+      - MqttSettings__EnableTls=false
+      - MqttSettings__EnableZigbee2MqttBridge=false
+      - Provisioning__SharedKey=local-dev-provisioning-key
+      - Provisioning__ClaimCodeMinutes=10
+      - EmailSettings__Enabled=false
+      - OpenTelemetry__ServiceName=AeroponicIOT
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: aeroponiciot-db
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=AeroponicIOT_DB_P@ss123
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqldata:/var/opt/mssql
+    restart: unless-stopped
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "AeroponicIOT_DB_P@ss123" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 120s
+
+volumes:
+  sqldata:

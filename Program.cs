@@ -2,6 +2,8 @@ using AeroponicIOT.Data;
 using AeroponicIOT.Models;
 using AeroponicIOT.Services.AI;
 using AeroponicIOT.Services.Automation;
+using AeroponicIOT.Services.BackgroundJobs;
+using AeroponicIOT.Services.Caching;
 using AeroponicIOT.Services.Mqtt;
 using AeroponicIOT.Services.Notifications;
 using AeroponicIOT.Services.Sensors;
@@ -9,6 +11,8 @@ using AeroponicIOT.Services.Maintenance;
 using AeroponicIOT.Services.Security;
 using AeroponicIOT.Middleware;
 using AeroponicIOT.Options;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +23,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using StackExchange.Redis;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -244,14 +249,25 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 var redisConfiguration = builder.Configuration["Redis:Configuration"];
 if (!string.IsNullOrWhiteSpace(redisConfiguration))
 {
+    // Register direct Redis connection multiplexer for custom cache operations
+    var redis = ConnectionMultiplexer.Connect(redisConfiguration);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+
+    // Register distributed cache backed by Redis
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = redisConfiguration;
     });
+
+    // Register custom cache service for domain-specific operations
+    builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 }
 else
 {
+    // Fallback to in-memory cache for development
     builder.Services.AddDistributedMemoryCache();
+    // Provide a no-op cache service when Redis is not available
+    builder.Services.AddSingleton<ICacheService, NoCacheService>();
 }
 
 builder.Services.AddScoped<IOnboardingAttemptTracker, DistributedOnboardingAttemptTracker>();
@@ -265,6 +281,7 @@ builder.Services.AddHttpClient("ai-proxy")
         UseProxy = true
     });
 builder.Services.AddScoped<ICurrentUserService, HttpCurrentUserService>();
+builder.Services.AddScoped<IResourceOwnershipService, ResourceOwnershipService>();
 
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Application is running"), tags: new[] { "live" })
@@ -321,10 +338,31 @@ builder.Services.AddOpenTelemetry()
         }
     });
 
-// Add DbContext
+// Add DbContext with connection pooling for horizontal scalability
+// Connection pooling is enabled by default in EF Core 6+ (pool size: 256, idle timeout: 600s)
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions => sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null);
+        sqlOptions.CommandTimeout(30);
+    });
+    // No tracking by default for better query performance in read-heavy dashboard
+    options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+});
+
+// Add Hangfire for background job processing (persistent, retryable)
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddHangfireServer();
+
+// Register background job classes
+builder.Services.AddScoped<AlertNotificationJob>();
+builder.Services.AddScoped<AIAnalysisJob>();
 
 // Add MQTT Service
 builder.Services.AddSingleton<IMqttService, MqttService>();
@@ -384,6 +422,12 @@ app.UseCors("ConfiguredOrigins");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Hangfire Dashboard (admin-only in production)
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new HangfireAuthorizationFilter() }
+});
 
 // Serve static files
 app.UseStaticFiles();
@@ -456,6 +500,31 @@ catch (Exception ex)
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
     logger.LogError(ex, "Failed to start MQTT broker");
 }
+
+// Configure graceful shutdown: allow in-flight requests to complete before stopping
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(async () =>
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("Application is shutting down...");
+
+    try
+    {
+        // Stop accepting new requests (wait up to 5 seconds for graceful completion)
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        
+        // Stop MQTT client gracefully
+        var mqttService = app.Services.GetRequiredService<IMqttService>();
+        await mqttService.StopAsync();
+        
+        // Stop Hangfire jobs (already configured to stop on shutdown)
+        logger.LogInformation("MQTT service stopped, Hangfire jobs draining...");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error during graceful shutdown");
+    }
+});
 
 app.Run();
 

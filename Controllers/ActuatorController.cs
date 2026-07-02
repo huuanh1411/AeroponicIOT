@@ -19,17 +19,20 @@ public class ActuatorController : ControllerBase
     private readonly IMqttService _mqttService;
     private readonly ILogger<ActuatorController> _logger;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IResourceOwnershipService _resourceOwnership;
 
     public ActuatorController(
         ApplicationDbContext context,
         IMqttService mqttService,
         ILogger<ActuatorController> logger,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IResourceOwnershipService resourceOwnership)
     {
         _context = context;
         _mqttService = mqttService;
         _logger = logger;
         _currentUserService = currentUserService;
+        _resourceOwnership = resourceOwnership;
     }
 
     [HttpPost("control")]
@@ -47,16 +50,12 @@ public class ActuatorController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", $"Device with MAC address {controlDto.MacAddress} not found");
             }
 
-            // Ensure requester owns the device or is admin
+            // Check authorization
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
+            if (!_resourceOwnership.CanAccessDevice(device, currentUser))
             {
-                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
-                {
-                    _logger.LogWarning("Unauthorized actuator control attempt by user {UserId} on device {DeviceId}", currentUser.UserId, device.Id);
-                    return Forbid();
-                }
+                _logger.LogWarning("Unauthorized actuator control attempt by user {UserId} on device {DeviceId}", currentUser.UserId, device.Id);
+                return Forbid();
             }
 
             // Validate action
@@ -116,14 +115,8 @@ public class ActuatorController : ControllerBase
                 return ApiProblem(StatusCodes.Status404NotFound, "Not Found", "Device not found");
 
             var currentUser = _currentUserService.GetCurrentUser();
-
-            if (!currentUser.IsAdministrator)
-            {
-                if (!currentUser.UserId.HasValue || device.UserId != currentUser.UserId.Value)
-                {
-                    return Forbid();
-                }
-            }
+            if (!_resourceOwnership.CanAccessDevice(device, currentUser))
+                return Forbid();
 
             var logs = await _context.ActuatorLogs
                 .Where(al => al.DeviceId == deviceId && al.Timestamp >= cutoffTime)

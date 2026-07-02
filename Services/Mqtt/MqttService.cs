@@ -6,22 +6,17 @@ using AeroponicIOT.Services.Sensors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MQTTnet;
-using MQTTnet.Adapter;
-using MQTTnet.Diagnostics;
+using MQTTnet.Client;
 using MQTTnet.Protocol;
-using MQTTnet.Server;
 using System.Collections.Concurrent;
-using System.Net.Security;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 
 namespace AeroponicIOT.Services.Mqtt;
 
 /// <summary>
-/// MQTT broker service for device communication
-/// Handles device connections, subscriptions, and message publishing
+/// MQTT client service for connecting to external MQTT broker (EMQX)
+/// Handles device subscriptions, message publishing, and sensor data ingestion
 /// </summary>
 public class MqttService : IMqttService, IDisposable
 {
@@ -29,9 +24,8 @@ public class MqttService : IMqttService, IDisposable
     private readonly MqttSettingsOptions _mqttOptions;
     private readonly ProvisioningOptions _provisioningOptions;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ConcurrentDictionary<string, string> _authorizedClientMacs = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, string> _authenticatedClientUsernames = new(StringComparer.OrdinalIgnoreCase);
-    private MqttServer? _mqttServer;
+    private readonly ConcurrentDictionary<string, string> _deviceSubscriptions = new();
+    private IMqttClient? _mqttClient;
     private bool _isRunning;
     private volatile bool _zigbeeBridgeAuthenticatedSinceStartup;
 
@@ -46,14 +40,10 @@ public class MqttService : IMqttService, IDisposable
         get
         {
             if (!_mqttOptions.EnableZigbee2MqttBridge)
-            {
                 return "Zigbee bridge integration is disabled";
-            }
 
             if (!_mqttOptions.EnforceZigbeeTopicAcl)
-            {
                 return "Zigbee bridge ACL is disabled";
-            }
 
             return _zigbeeBridgeAuthenticatedSinceStartup
                 ? "Configured Zigbee bridge identity has authenticated"
@@ -74,154 +64,109 @@ public class MqttService : IMqttService, IDisposable
     }
 
     /// <summary>
-    /// Start the MQTT broker on the configured port
+    /// Connect to external MQTT broker (EMQX)
     /// </summary>
     public async Task StartAsync()
     {
         try
         {
-            var port = _mqttOptions.Port;
-            var optionsBuilder = new MqttServerOptionsBuilder()
-                .WithDefaultEndpointPort(port)
-                .WithDefaultEndpointBoundIPAddress(System.Net.IPAddress.Any);
+            var factory = new MqttFactory();
+            _mqttClient = factory.CreateMqttClient();
 
-            if (_mqttOptions.EnableTls)
+            // Configure connection options
+            var optionsBuilder = new MqttClientOptionsBuilder()
+                .WithTcpServer(_mqttOptions.Host, _mqttOptions.Port)
+                .WithClientId($"AeroponicIOT-{Guid.NewGuid().ToString().Substring(0, 8)}")
+                .WithCleanSession(true)
+                .WithKeepAlivePeriod(TimeSpan.FromSeconds(60));
+
+            // Add credentials if configured
+            if (!string.IsNullOrWhiteSpace(_mqttOptions.Username) && !string.IsNullOrWhiteSpace(_mqttOptions.Password))
             {
-                var serverCertificate = LoadServerCertificate(
-                    _mqttOptions.ServerCertificatePath,
-                    _mqttOptions.ServerCertificatePassword);
-
-                optionsBuilder
-                    .WithEncryptedEndpoint()
-                    .WithEncryptedEndpointPort(_mqttOptions.TlsPort)
-                    .WithEncryptionCertificate(serverCertificate);
-
-                if (_mqttOptions.RequireClientCertificate)
-                {
-                    optionsBuilder.WithClientCertificate(ValidateClientCertificate, true);
-                }
-
-                if (_mqttOptions.DisablePlaintextEndpoint)
-                {
-                    optionsBuilder.WithoutDefaultEndpoint();
-                }
+                optionsBuilder.WithCredentials(_mqttOptions.Username, _mqttOptions.Password);
             }
 
-            // If MQTT username/password are configured, enforce connection authentication
-            var mqttUser = _mqttOptions.Username;
-            var mqttPassword = _mqttOptions.Password;
-            var requireClientAuthentication = _mqttOptions.RequireClientAuthentication;
+            // Add TLS if configured
+            if (_mqttOptions.EnableTls)
+            {
+                optionsBuilder.WithTlsOptions(o =>
+                {
+                    o.WithAllowUntrustedCertificates();
+                    o.WithIgnoreCertificateChainErrors();
+                });
+            }
 
             var options = optionsBuilder.Build();
 
-            var factory = new MqttFactory();
-            _mqttServer = factory.CreateMqttServer(options);
+            // Setup message received handler
+            _mqttClient.ApplicationMessageReceivedAsync += OnMessageReceivedAsync;
+            _mqttClient.DisconnectedAsync += OnDisconnectedAsync;
+            _mqttClient.ConnectedAsync += OnConnectedAsync;
 
-            // Handle client connected
-            _mqttServer.ClientConnectedAsync += async e =>
-            {
-                _logger.LogInformation("MQTT Client connected: {ClientId}", e.ClientId);
-                await Task.CompletedTask;
-            };
+            // Connect to broker
+            var result = await _mqttClient.ConnectAsync(options);
 
-            // Handle client disconnected
-            _mqttServer.ClientDisconnectedAsync += async e =>
+            if (result.ResultCode == MqttClientConnectResultCode.Success)
             {
-                _logger.LogInformation("MQTT Client disconnected: {ClientId}", e.ClientId);
-                _authorizedClientMacs.TryRemove(e.ClientId, out _);
-                _authenticatedClientUsernames.TryRemove(e.ClientId, out _);
-                await Task.CompletedTask;
-            };
+                _isRunning = true;
+                _logger.LogInformation(
+                    "Connected to MQTT broker at {Host}:{Port}",
+                    _mqttOptions.Host,
+                    _mqttOptions.Port);
 
-            if (requireClientAuthentication)
-            {
-                _mqttServer.ValidatingConnectionAsync += async e =>
+                // Subscribe to device topics
+                var topicPrefix = _mqttOptions.DeviceTopicPrefix.Trim().Trim('/');
+                await _mqttClient.SubscribeAsync(new MqttTopicFilterBuilder()
+                    .WithTopic($"{topicPrefix}/+/telemetry")
+                    .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                    .Build());
+
+                _logger.LogInformation("Subscribed to sensor telemetry topics");
+
+                // Subscribe to Zigbee bridge if enabled
+                if (_mqttOptions.EnableZigbee2MqttBridge)
                 {
-                    if (string.IsNullOrWhiteSpace(e.UserName) || string.IsNullOrWhiteSpace(e.Password))
-                    {
-                        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-                        await Task.CompletedTask;
-                        return;
-                    }
+                    var zigbeePrefix = _mqttOptions.Zigbee2MqttTopicPrefix.Trim().Trim('/');
+                    await _mqttClient.SubscribeAsync(new MqttTopicFilterBuilder()
+                        .WithTopic($"{zigbeePrefix}/bridge/state")
+                        .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                        .Build());
 
-                    // Administrative credentials are allowed for trusted tools.
-                    if (!string.IsNullOrWhiteSpace(mqttUser)
-                        && !string.IsNullOrWhiteSpace(mqttPassword)
-                        && e.UserName == mqttUser
-                        && e.Password == mqttPassword)
-                    {
-                        _authenticatedClientUsernames[e.ClientId] = e.UserName;
-                        TrackZigbeeBridgeAuthentication(e.ClientId, e.UserName);
-                        e.ReasonCode = MqttConnectReasonCode.Success;
-                        await Task.CompletedTask;
-                        return;
-                    }
-
-                    // Device credentials: username must be MAC and password must match derived secret.
-                    var normalizedMac = NormalizeMacAddress(e.UserName);
-                    if (normalizedMac == null)
-                    {
-                        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-                        await Task.CompletedTask;
-                        return;
-                    }
-
-                    var expectedPassword = ComputeDevicePassword(normalizedMac, _provisioningOptions.SharedKey);
-                    var providedBytes = Encoding.UTF8.GetBytes(e.Password);
-                    var expectedBytes = Encoding.UTF8.GetBytes(expectedPassword);
-
-                    if (!CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes))
-                    {
-                        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-                        await Task.CompletedTask;
-                        return;
-                    }
-
-                    _authorizedClientMacs[e.ClientId] = normalizedMac;
-                    _authenticatedClientUsernames[e.ClientId] = e.UserName;
-                    TrackZigbeeBridgeAuthentication(e.ClientId, e.UserName);
-                    e.ReasonCode = MqttConnectReasonCode.Success;
-                    await Task.CompletedTask;
-                };
+                    _logger.LogInformation("Subscribed to Zigbee bridge status");
+                }
             }
-
-            // Handle incoming published messages (for sensor data ingestion)
-            _mqttServer.InterceptingPublishAsync += OnInterceptingPublishAsync;
-
-            await _mqttServer.StartAsync();
-            _isRunning = true;
-
-            _logger.LogInformation(
-                "MQTT Broker started. PlaintextPort={PlaintextPort}, TlsEnabled={TlsEnabled}, TlsPort={TlsPort}, ClientCertRequired={ClientCertRequired}",
-                _mqttOptions.DisablePlaintextEndpoint ? 0 : port,
-                _mqttOptions.EnableTls,
-                _mqttOptions.EnableTls ? _mqttOptions.TlsPort : 0,
-                _mqttOptions.RequireClientCertificate);
+            else
+            {
+                _logger.LogError(
+                    "Failed to connect to MQTT broker: {ReasonCode}",
+                    result.ResultCode);
+                throw new InvalidOperationException($"Failed to connect to MQTT broker: {result.ResultCode}");
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error starting MQTT broker");
+            _logger.LogError(ex, "Error starting MQTT client connection");
             throw;
         }
     }
 
     /// <summary>
-    /// Stop the MQTT broker
+    /// Disconnect from the MQTT broker
     /// </summary>
     public async Task StopAsync()
     {
         try
         {
-            if (_mqttServer != null)
+            if (_mqttClient?.IsConnected == true)
             {
-                await _mqttServer.StopAsync();
+                await _mqttClient.DisconnectAsync();
                 _isRunning = false;
-                _logger.LogInformation("MQTT Broker stopped");
+                _logger.LogInformation("Disconnected from MQTT broker");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error stopping MQTT broker");
+            _logger.LogError(ex, "Error stopping MQTT client connection");
             throw;
         }
     }
@@ -233,24 +178,20 @@ public class MqttService : IMqttService, IDisposable
     {
         try
         {
-            if (_mqttServer == null || !_isRunning)
+            if (_mqttClient?.IsConnected != true)
             {
-                _logger.LogWarning("MQTT Broker not running, cannot publish to {Topic}", topic);
+                _logger.LogWarning("MQTT client not connected, cannot publish to {Topic}", topic);
                 return false;
             }
 
-            var applicationMessage = new MqttApplicationMessageBuilder()
+            var message = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
                 .WithPayload(payload)
                 .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
                 .WithRetainFlag(retainFlag)
                 .Build();
 
-            await _mqttServer.InjectApplicationMessage(
-                new InjectedMqttApplicationMessage(applicationMessage)
-                {
-                    SenderClientId = "ServerPublisher"
-                });
+            await _mqttClient.PublishAsync(message);
 
             _logger.LogDebug("Published message to topic {Topic}", topic);
             return true;
@@ -264,421 +205,127 @@ public class MqttService : IMqttService, IDisposable
 
     public void Dispose()
     {
-        if (_mqttServer != null)
-        {
-            _mqttServer.InterceptingPublishAsync -= OnInterceptingPublishAsync;
-            _mqttServer.Dispose();
-        }
+        _mqttClient?.Dispose();
     }
 
-    private async Task OnInterceptingPublishAsync(InterceptingPublishEventArgs args)
+    private async Task OnMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
     {
         try
         {
             var topic = args.ApplicationMessage.Topic;
-            if (string.IsNullOrWhiteSpace(topic))
-            {
-                return;
-            }
-
-            // ── Zigbee2MQTT bridge topics ─────────────────────────────────
-            if (_mqttOptions.EnableZigbee2MqttBridge)
-            {
-                var zigbeePrefix = _mqttOptions.Zigbee2MqttTopicPrefix.Trim().Trim('/');
-                if (topic.StartsWith($"{zigbeePrefix}/", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!IsAuthorizedZigbeePublisher(args.ClientId))
-                    {
-                        args.ProcessPublish = false;
-                        _logger.LogWarning(
-                            "MQTT Zigbee publish denied by ACL. ClientId={ClientId}, Topic={Topic}",
-                            args.ClientId,
-                            topic);
-                        return;
-                    }
-
-                    var zigbeePayloadBytes = args.ApplicationMessage.PayloadSegment;
-                    if (zigbeePayloadBytes.Count > 0)
-                    {
-                        var zigbeeJson = Encoding.UTF8.GetString(zigbeePayloadBytes);
-                        await HandleZigbee2MqttMessageAsync(topic, zigbeePrefix, zigbeeJson);
-                    }
-                    return;
-                }
-            }
-
-            // ── Existing WiFi device sensor messages ──────────────────────
-            // Expect sensor messages on: devices/{macAddress}/sensor
-            var expectedPrefix = _mqttOptions.DeviceTopicPrefix.Trim().Trim('/');
-            if (!topic.StartsWith($"{expectedPrefix}/", StringComparison.OrdinalIgnoreCase) ||
-                !topic.EndsWith("/sensor", StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            var segments = topic.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Length < 3)
-            {
-                return;
-            }
-
-            var macAddress = segments[1];
-
-            if (_mqttOptions.EnforceTopicAcl &&
-                !string.Equals(args.ClientId, "ServerPublisher", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!_authorizedClientMacs.TryGetValue(args.ClientId, out var authorizedMac) ||
-                    !string.Equals(authorizedMac, NormalizeMacAddress(macAddress), StringComparison.OrdinalIgnoreCase))
-                {
-                    args.ProcessPublish = false;
-                    _logger.LogWarning(
-                        "MQTT publish denied by ACL. ClientId={ClientId}, Topic={Topic}",
-                        args.ClientId,
-                        topic);
-                    return;
-                }
-            }
-
             var payloadBytes = args.ApplicationMessage.PayloadSegment;
-            if (payloadBytes.Count == 0)
+
+            if (string.IsNullOrWhiteSpace(topic) || payloadBytes.Count == 0)
+                return;
+
+            // Handle Zigbee bridge status
+            var zigbeePrefix = _mqttOptions.Zigbee2MqttTopicPrefix.Trim().Trim('/');
+            if (topic.Equals($"{zigbeePrefix}/bridge/state", StringComparison.OrdinalIgnoreCase))
             {
+                var payload = Encoding.UTF8.GetString(payloadBytes);
+                if (payload.Contains("online", StringComparison.OrdinalIgnoreCase))
+                {
+                    _zigbeeBridgeAuthenticatedSinceStartup = true;
+                    _logger.LogInformation("Zigbee bridge is online");
+                }
                 return;
             }
 
-            var json = Encoding.UTF8.GetString(payloadBytes);
+            // Handle device telemetry
+            var topicPrefix = _mqttOptions.DeviceTopicPrefix.Trim().Trim('/');
+            if (!topic.StartsWith($"{topicPrefix}/", StringComparison.OrdinalIgnoreCase))
+                return;
 
-            SensorDataDto? sensorData;
-            try
+            // Parse topic: devices/MAC/telemetry
+            var parts = topic.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 3 || !parts[2].Equals("telemetry", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var macAddress = NormalizeMacAddress(parts[1]);
+            if (macAddress == null)
             {
-                sensorData = JsonSerializer.Deserialize<SensorDataDto>(json);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to deserialize MQTT sensor payload from topic {Topic}", topic);
+                _logger.LogWarning("Invalid MAC address in topic: {Topic}", topic);
                 return;
             }
 
-            if (sensorData == null)
-            {
-                return;
-            }
-
-            // Ensure MAC from topic is applied if not present in payload.
-            if (string.IsNullOrWhiteSpace(sensorData.MacAddress))
-            {
-                sensorData.MacAddress = macAddress;
-            }
-
-            using var scope = _scopeFactory.CreateScope();
-            var ingestionService = scope.ServiceProvider.GetRequiredService<ISensorIngestionService>();
-
-            await ingestionService.ProcessSensorDataAsync(sensorData, CancellationToken.None);
-
-            _logger.LogInformation("Sensor data ingested via MQTT for device {MacAddress}", sensorData.MacAddress);
+            var payloadString = Encoding.UTF8.GetString(payloadBytes);
+            await ProcessSensorDataAsync(macAddress, payloadString);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing MQTT sensor message");
+            _logger.LogError(ex, "Error processing MQTT message");
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Zigbee2MQTT helpers
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Full Zigbee2MQTT message handler that receives the decoded JSON string.
-    /// Called from <see cref="OnInterceptingPublishAsync"/> once bytes are read.
-    /// </summary>
-    private async Task HandleZigbee2MqttMessageAsync(string topic, string zigbeePrefix, string json)
+    private async Task OnConnectedAsync(MqttClientConnectedEventArgs args)
     {
-        // ── Bridge lifecycle events ───────────────────────────────────────
-        if (topic.Equals($"{zigbeePrefix}/bridge/event", StringComparison.OrdinalIgnoreCase))
-        {
-            await HandleZigbeeBridgeEventAsync(json);
-            return;
-        }
-
-        // Ignore other bridge/* management topics (state, log, devices, groups, …)
-        if (topic.StartsWith($"{zigbeePrefix}/bridge/", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        // ── Device telemetry ─────────────────────────────────────────────
-        var segments = topic.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length < 2)
-        {
-            return;
-        }
-
-        var friendlyName = segments[1];
-        var sensorData = ZigbeePayloadMapper.TryMap(friendlyName, json, out var unknownKeys);
-        if (unknownKeys.Length > 0)
-        {
-            _logger.LogDebug(
-                "Zigbee payload contained unmapped keys. FriendlyName={FriendlyName}, Keys={Keys}",
-                friendlyName,
-                string.Join(",", unknownKeys));
-        }
-
-        if (sensorData == null)
-        {
-            // Frame contains no supported telemetry fields. Usually metadata-only updates.
-            _logger.LogDebug(
-                "Zigbee payload skipped because no supported sensor fields were found. FriendlyName={FriendlyName}, Topic={Topic}",
-                friendlyName,
-                topic);
-            return;
-        }
-
-        using var scope = _scopeFactory.CreateScope();
-        var ingestionService = scope.ServiceProvider.GetRequiredService<ISensorIngestionService>();
-        await ingestionService.ProcessSensorDataAsync(sensorData, CancellationToken.None);
-
-        _logger.LogInformation(
-            "Sensor data ingested via Zigbee2MQTT for device. FriendlyName={FriendlyName}, Identifier={Identifier}",
-            friendlyName,
-            sensorData.MacAddress);
+        _logger.LogInformation("MQTT client connected");
     }
 
-    /// <summary>
-    /// Auto-provisions a new Zigbee device as a <see cref="Device"/> record with
-    /// <c>ProtocolType = "zigbee"</c> and <c>Status = Pending</c> when it joins
-    /// the coordinator for the first time.  A user can then claim it from the
-    /// dashboard using the standard claim flow.
-    /// </summary>
-    private async Task HandleZigbeeBridgeEventAsync(string json)
+    private async Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs args)
+    {
+        _isRunning = false;
+        _logger.LogWarning("MQTT client disconnected, will attempt to reconnect");
+        
+        // Attempt to reconnect after delay
+        await Task.Delay(TimeSpan.FromSeconds(5));
+        try
+        {
+            await StartAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reconnect to MQTT broker");
+        }
+    }
+
+    private async Task ProcessSensorDataAsync(string macAddress, string payloadJson)
     {
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            if (!root.TryGetProperty("type", out var typeProp))
-            {
-                return;
-            }
-
-            var eventType = typeProp.GetString();
-
-            // Act on first join and on successful interview (full device info available)
-            if (eventType is not ("device_joined" or "device_interview_successful"))
-            {
-                return;
-            }
-
-            if (!root.TryGetProperty("data", out var data))
-            {
-                return;
-            }
-
-            var friendlyName  = data.TryGetProperty("friendly_name",  out var fn)   ? fn.GetString()   : null;
-            var ieeeAddress   = data.TryGetProperty("ieee_address",   out var ieee) ? ieee.GetString()  : null;
-
-            // IEEE address is the canonical stable identifier; fall back to friendly name.
-            var identifier = ieeeAddress ?? friendlyName;
-            if (string.IsNullOrWhiteSpace(identifier))
-            {
-                return;
-            }
-
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var sensorService = scope.ServiceProvider.GetRequiredService<ISensorIngestionService>();
 
-            var normalizedLookup = identifier.Trim().ToUpperInvariant();
-            var existing = await context.Devices
-                .FirstOrDefaultAsync(d => d.MacAddress == normalizedLookup && d.ProtocolType == "zigbee");
+            // Find device by MAC address
+            var device = await context.Devices
+                .FirstOrDefaultAsync(d => d.MacAddress == macAddress);
 
-            // Backward-compatible duplicate guard for records created before
-            // uppercase normalization or protocol tagging.
-            existing ??= await context.Devices
-                .FirstOrDefaultAsync(d =>
-                    d.MacAddress != null &&
-                    d.MacAddress.ToUpper() == normalizedLookup &&
-                    (d.ProtocolType == null || d.ProtocolType == "zigbee"));
-
-            if (existing != null)
+            if (device == null)
             {
-                // Device already known – refresh last-seen timestamp.
-                existing.LastSeen = DateTime.UtcNow;
-                await context.SaveChangesAsync();
+                _logger.LogWarning("Received data from unregistered device: {MacAddress}", macAddress);
                 return;
             }
 
-            // Normalize to uppercase: SensorIngestionService uppercases
-            // the MacAddress before lookup, so the stored value must match.
-            var normalizedIdentifier = identifier.Trim().ToUpperInvariant();
-
-            var device = new Device
+            // Parse sensor data
+            using var jsonDoc = JsonDocument.Parse(payloadJson);
+            var sensorDto = new SensorDataDto
             {
-                DeviceName     = friendlyName ?? normalizedIdentifier,
-                MacAddress     = normalizedIdentifier,
-                ChipId         = ieeeAddress?.Trim().ToUpperInvariant(),
-                ProtocolType   = "zigbee",
-                Status         = DeviceStatusValues.Pending,
-                CreatedAt      = DateTime.UtcNow,
-                LastSeen       = DateTime.UtcNow,
-                ProvisionedAt  = DateTime.UtcNow,
+                MacAddress = macAddress,
+                Ph = jsonDoc.RootElement.TryGetProperty("ph", out var ph) ? ph.GetDouble() : null,
+                Tds = jsonDoc.RootElement.TryGetProperty("tds", out var tds) ? (int?)tds.GetInt32() : null,
+                WaterTemperature = jsonDoc.RootElement.TryGetProperty("water_temp", out var wt) ? wt.GetDouble() : null,
+                AirHumidity = jsonDoc.RootElement.TryGetProperty("humidity", out var h) ? h.GetDouble() : null,
+                LightIntensity = jsonDoc.RootElement.TryGetProperty("light", out var l) ? (int?)l.GetInt32() : null
             };
 
-            context.Devices.Add(device);
-            await context.SaveChangesAsync();
+            // Ingest sensor data
+            await sensorService.ProcessSensorDataAsync(sensorDto);
 
-            _logger.LogInformation(
-                "Zigbee device auto-provisioned: {Identifier} (event: {EventType})",
-                identifier, eventType);
+            _logger.LogDebug("Processed sensor data from device {DeviceId} ({MacAddress})", device.Id, macAddress);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to handle Zigbee2MQTT bridge event");
+            _logger.LogError(ex, "Error processing sensor data from {MacAddress}", macAddress);
         }
     }
 
-    private bool IsAuthorizedZigbeePublisher(string? clientId)
+    private static string? NormalizeMacAddress(string? input)
     {
-        if (!_mqttOptions.EnableZigbee2MqttBridge || !_mqttOptions.EnforceZigbeeTopicAcl)
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(clientId))
-        {
-            return false;
-        }
-
-        if (string.Equals(clientId, "ServerPublisher", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var configuredClientId = _mqttOptions.ZigbeeBridgeClientId?.Trim();
-        if (!string.IsNullOrWhiteSpace(configuredClientId) &&
-            string.Equals(clientId, configuredClientId, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var configuredUsername = _mqttOptions.ZigbeeBridgeUsername?.Trim();
-        if (!string.IsNullOrWhiteSpace(configuredUsername) &&
-            _authenticatedClientUsernames.TryGetValue(clientId, out var authenticatedUsername) &&
-            string.Equals(authenticatedUsername, configuredUsername, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    private void TrackZigbeeBridgeAuthentication(string? clientId, string? username)
-    {
-        if (_zigbeeBridgeAuthenticatedSinceStartup)
-        {
-            return;
-        }
-
-        if (!_mqttOptions.EnableZigbee2MqttBridge || !_mqttOptions.EnforceZigbeeTopicAcl)
-        {
-            _zigbeeBridgeAuthenticatedSinceStartup = true;
-            return;
-        }
-
-        var configuredClientId = _mqttOptions.ZigbeeBridgeClientId?.Trim();
-        if (!string.IsNullOrWhiteSpace(configuredClientId) &&
-            !string.IsNullOrWhiteSpace(clientId) &&
-            string.Equals(clientId, configuredClientId, StringComparison.OrdinalIgnoreCase))
-        {
-            _zigbeeBridgeAuthenticatedSinceStartup = true;
-            return;
-        }
-
-        var configuredUsername = _mqttOptions.ZigbeeBridgeUsername?.Trim();
-        if (!string.IsNullOrWhiteSpace(configuredUsername) &&
-            !string.IsNullOrWhiteSpace(username) &&
-            string.Equals(username, configuredUsername, StringComparison.OrdinalIgnoreCase))
-        {
-            _zigbeeBridgeAuthenticatedSinceStartup = true;
-        }
-    }
-
-    private static string? NormalizeMacAddress(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
+        if (string.IsNullOrWhiteSpace(input))
             return null;
-        }
 
-        var trimmed = value.Trim().ToUpperInvariant();
-        var pattern = @"^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$";
-        if (!System.Text.RegularExpressions.Regex.IsMatch(trimmed, pattern))
-        {
-            return null;
-        }
-
-        return trimmed.Replace('-', ':');
-    }
-
-    private static string ComputeDevicePassword(string normalizedMac, string sharedKey)
-    {
-        var keyBytes = Encoding.UTF8.GetBytes(sharedKey);
-        var dataBytes = Encoding.UTF8.GetBytes(normalizedMac);
-        using var hmac = new HMACSHA256(keyBytes);
-        var hash = hmac.ComputeHash(dataBytes);
-        return Convert.ToHexString(hash);
-    }
-
-    private static X509Certificate2 LoadServerCertificate(string? certificatePath, string? certificatePassword)
-    {
-        if (string.IsNullOrWhiteSpace(certificatePath))
-        {
-            throw new InvalidOperationException("MQTT TLS is enabled but MqttSettings:ServerCertificatePath is not configured.");
-        }
-
-        if (!File.Exists(certificatePath))
-        {
-            throw new FileNotFoundException("MQTT server certificate file was not found.", certificatePath);
-        }
-
-        return new X509Certificate2(certificatePath, certificatePassword);
-    }
-
-    private bool ValidateClientCertificate(
-        object sender,
-        X509Certificate? certificate,
-        X509Chain? chain,
-        SslPolicyErrors sslPolicyErrors)
-    {
-        if (certificate is null || sslPolicyErrors != SslPolicyErrors.None)
-        {
-            return false;
-        }
-
-        var cert2 = certificate as X509Certificate2 ?? new X509Certificate2(certificate);
-
-        var allowlistedIssuers = _mqttOptions.AllowedClientCertificateIssuers
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(v => v.Trim())
-            .ToArray();
-
-        var allowlistedThumbprints = _mqttOptions.AllowedClientCertificateThumbprints
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(NormalizeThumbprint)
-            .ToArray();
-
-        var issuerMatched = allowlistedIssuers.Length == 0 ||
-            allowlistedIssuers.Any(issuer =>
-                string.Equals(cert2.Issuer, issuer, StringComparison.OrdinalIgnoreCase));
-
-        var certThumbprint = NormalizeThumbprint(cert2.Thumbprint ?? string.Empty);
-        var thumbprintMatched = allowlistedThumbprints.Length == 0 ||
-            allowlistedThumbprints.Contains(certThumbprint, StringComparer.OrdinalIgnoreCase);
-
-        return issuerMatched && thumbprintMatched;
-    }
-
-    private static string NormalizeThumbprint(string thumbprint)
-    {
-        return thumbprint.Replace(" ", string.Empty, StringComparison.Ordinal)
-            .ToUpperInvariant();
+        var normalized = System.Text.RegularExpressions.Regex.Replace(input.ToUpper(), "[^0-9A-F]", "");
+        return normalized.Length == 12 ? string.Join(":", Enumerable.Range(0, 6).Select(i => normalized.Substring(i * 2, 2))) : null;
     }
 }

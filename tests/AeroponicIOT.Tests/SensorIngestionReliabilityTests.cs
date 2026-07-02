@@ -1,9 +1,13 @@
+using System.Linq.Expressions;
 using AeroponicIOT.Data;
 using AeroponicIOT.DTOs;
 using AeroponicIOT.Models;
 using AeroponicIOT.Services.AI;
 using AeroponicIOT.Services.Notifications;
 using AeroponicIOT.Services.Sensors;
+using Hangfire;
+using Hangfire.Common;
+using Hangfire.States;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -64,12 +68,10 @@ public class SensorIngestionReliabilityTests
         dbContext.Devices.Add(device);
         await dbContext.SaveChangesAsync();
 
-        var notificationService = new ThrowingNotificationService();
-        var aiSuggestionService = new NoopAISuggestionService();
+        var backgroundJobClient = new NoopBackgroundJobClient();
         var ingestionService = new SensorIngestionService(
             dbContext,
-            notificationService,
-            aiSuggestionService,
+            backgroundJobClient,
             NullLogger<SensorIngestionService>.Instance);
 
         var payload = new SensorDataDto
@@ -109,5 +111,35 @@ public class SensorIngestionReliabilityTests
     {
         public Task<AiSuggestionResult?> AnalyzeSensorDataAsync(int deviceId, string macAddress, CancellationToken cancellationToken = default)
             => Task.FromResult<AiSuggestionResult?>(null);
+    }
+
+    private sealed class NoopBackgroundJobClient : IBackgroundJobClient
+    {
+        public string Create<T>(Expression<Func<T, Task>> methodCall, IState state)
+            => Guid.NewGuid().ToString();
+
+        public string Create<T>(Expression<Action<T>> methodCall, IState state)
+            => Guid.NewGuid().ToString();
+
+        public string Create(Job job, IState state)
+            => Guid.NewGuid().ToString();
+
+        public bool ChangeState(string jobId, IState state, string? expectedState = null)
+            => true;
+
+        public bool Requeue(string jobId)
+            => true;
+
+        public bool Delete(string jobId)
+            => true;
+
+        public bool ContinueJobWith<T>(string parentId, Expression<Func<T, Task>> methodCall, IState state)
+            => true;
+
+        public bool ContinueJobWith<T>(string parentId, Expression<Action<T>> methodCall, IState state)
+            => true;
+
+        public bool ContinueJobWith(string parentId, Job job, IState state)
+            => true;
     }
 }

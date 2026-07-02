@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj": {}
+    "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj": {}
   },
   "projects": {
-    "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj": {
+    "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj",
+        "projectUniqueName": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj",
         "projectName": "AeroponicIOT",
-        "projectPath": "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\AeroponicIOT.csproj",
-        "packagesPath": "C:\\Users\\drago\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\drago\\Desktop\\Studies\\AeroponicIOT\\obj\\",
+        "projectPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj",
+        "packagesPath": "C:\\Users\\ADMIN\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\drago\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "C:\\Users\\ADMIN\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
@@ -24,6 +24,7 @@
         },
         "frameworks": {
           "net10.0": {
+            "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {}
           }
@@ -33,15 +34,28 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.100"
+        "SdkAnalysisLevel": "10.0.300"
       },
       "frameworks": {
         "net10.0": {
+          "framework": "net10.0",
           "targetAlias": "net10.0",
           "dependencies": {
             "BCrypt.Net-Core": {
               "target": "Package",
               "version": "[1.6.0, )"
+            },
+            "Hangfire.AspNetCore": {
+              "target": "Package",
+              "version": "[*, )"
+            },
+            "Hangfire.Core": {
+              "target": "Package",
+              "version": "[*, )"
+            },
+            "Hangfire.SqlServer": {
+              "target": "Package",
+              "version": "[*, )"
             },
             "MQTTnet": {
               "target": "Package",
@@ -123,7 +137,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.108/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.AspNetCore": "(,10.0.32767]",
             "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",
