@@ -143,6 +143,22 @@
           }
         }
       },
+      "Hangfire.InMemory/1.0.0": {
+        "type": "package",
+        "dependencies": {
+          "Hangfire.Core": "1.8.0"
+        },
+        "compile": {
+          "lib/netstandard2.0/Hangfire.InMemory.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/Hangfire.InMemory.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Hangfire.NetCore/1.8.23": {
         "type": "package",
         "dependencies": {
@@ -3042,6 +3058,28 @@
         "lib/netstandard2.0/tr-TR/Hangfire.Core.resources.dll",
         "lib/netstandard2.0/zh-TW/Hangfire.Core.resources.dll",
         "lib/netstandard2.0/zh/Hangfire.Core.resources.dll"
+      ]
+    },
+    "Hangfire.InMemory/1.0.0": {
+      "sha512": "56H71lfcqn5sN/8Bjj9hOLGTG5HIERLRuMsRJTFpw0Tsq5ck5OUkNvtUw92s7bwD3PRKOo4PkDGqNs9KugaqoQ==",
+      "type": "package",
+      "path": "hangfire.inmemory/1.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "COPYING",
+        "COPYING.LESSER",
+        "LICENSE.md",
+        "LICENSE_ROYALTYFREE",
+        "LICENSE_STANDARD",
+        "README.md",
+        "hangfire.inmemory.1.0.0.nupkg.sha512",
+        "hangfire.inmemory.nuspec",
+        "icon.png",
+        "lib/net451/Hangfire.InMemory.dll",
+        "lib/net451/Hangfire.InMemory.xml",
+        "lib/netstandard2.0/Hangfire.InMemory.dll",
+        "lib/netstandard2.0/Hangfire.InMemory.xml"
       ]
     },
     "Hangfire.NetCore/1.8.23": {
@@ -7586,6 +7624,7 @@
   "projectFileDependencyGroups": {
     "net10.0": [
       "AeroponicIOT >= 1.0.0",
+      "Hangfire.InMemory >= 1.0.0",
       "Microsoft.AspNetCore.Mvc.Testing >= 10.0.2",
       "Microsoft.EntityFrameworkCore.InMemory >= 10.0.0",
       "Microsoft.NET.Test.Sdk >= 17.14.1",
@@ -7594,19 +7633,19 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\ADMIN\\.nuget\\packages\\": {}
+    "/home/runner/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\AeroponicIOT.Tests.csproj",
+      "projectUniqueName": "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/AeroponicIOT.Tests.csproj",
       "projectName": "AeroponicIOT.Tests",
-      "projectPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\AeroponicIOT.Tests.csproj",
-      "packagesPath": "C:\\Users\\ADMIN\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\obj\\",
+      "projectPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/AeroponicIOT.Tests.csproj",
+      "packagesPath": "/home/runner/.nuget/packages/",
+      "outputPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\ADMIN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "/home/runner/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net10.0"
@@ -7619,8 +7658,8 @@
           "framework": "net10.0",
           "targetAlias": "net10.0",
           "projectReferences": {
-            "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj": {
-              "projectPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj"
+            "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj": {
+              "projectPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj"
             }
           }
         }
@@ -7637,6 +7676,10 @@
         "framework": "net10.0",
         "targetAlias": "net10.0",
         "dependencies": {
+          "Hangfire.InMemory": {
+            "target": "Package",
+            "version": "[1.0.0, )"
+          },
           "Microsoft.AspNetCore.Mvc.Testing": {
             "target": "Package",
             "version": "[10.0.2, )"
@@ -7676,7 +7719,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.301/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.CSharp": "(,4.7.32767]",
           "Microsoft.VisualBasic": "(,10.4.32767]",

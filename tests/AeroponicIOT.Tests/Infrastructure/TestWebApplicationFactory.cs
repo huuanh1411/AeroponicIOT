@@ -1,5 +1,8 @@
 using AeroponicIOT.Data;
+using AeroponicIOT.Services.Mqtt;
 using AeroponicIOT.Tests.Infrastructure;
+using Hangfire;
+using Hangfire.InMemory;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -60,6 +63,13 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
             {
                 options.UseInMemoryDatabase(_databaseName);
             });
+
+            // Replace Hangfire SQL Server storage with InMemory to avoid LocalDB dependency on Linux.
+            services.AddHangfire(config => config.UseInMemoryStorage());
+
+            // Replace the real MQTT service with a no-op stub so health checks pass without a live broker.
+            services.RemoveAll<IMqttService>();
+            services.AddSingleton<IMqttService, StubMqttService>();
 
             services.AddAuthentication(options =>
             {

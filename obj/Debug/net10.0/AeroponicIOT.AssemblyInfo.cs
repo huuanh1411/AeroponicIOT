@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AeroponicIOT")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e6284ab7ecf2f353b1cc53379fbdaadcb2711f77")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+19fda19de1ad8c2f2a11bb798145f42233577fe7")]
 [assembly: System.Reflection.AssemblyProductAttribute("AeroponicIOT")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AeroponicIOT")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -39,6 +39,7 @@
       "AeroponicIOT.Tests/1.0.0": {
         "dependencies": {
           "AeroponicIOT": "1.0.0",
+          "Hangfire.InMemory": "1.0.0",
           "Microsoft.AspNetCore.Mvc.Testing": "10.0.2",
           "Microsoft.EntityFrameworkCore.InMemory": "10.0.0",
           "Microsoft.NET.Test.Sdk": "17.14.1",
@@ -420,7 +421,7 @@
         "runtime": {
           "lib/netcoreapp3.0/Hangfire.AspNetCore.dll": {
             "assemblyVersion": "1.8.23.0",
-            "fileVersion": "1.8.23.0"
+            "fileVersion": "0.0.0.0"
           }
         },
         "compile": {
@@ -434,7 +435,7 @@
         "runtime": {
           "lib/netstandard2.0/Hangfire.Core.dll": {
             "assemblyVersion": "1.8.23.0",
-            "fileVersion": "1.8.23.0"
+            "fileVersion": "0.0.0.0"
           }
         },
         "resources": {
@@ -485,6 +486,20 @@
           "lib/netstandard2.0/Hangfire.Core.dll": {}
         }
       },
+      "Hangfire.InMemory/1.0.0": {
+        "dependencies": {
+          "Hangfire.Core": "1.8.23"
+        },
+        "runtime": {
+          "lib/netstandard2.0/Hangfire.InMemory.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        },
+        "compile": {
+          "lib/netstandard2.0/Hangfire.InMemory.dll": {}
+        }
+      },
       "Hangfire.NetCore/1.8.23": {
         "dependencies": {
           "Hangfire.Core": "1.8.23",
@@ -495,7 +510,7 @@
         "runtime": {
           "lib/netstandard2.1/Hangfire.NetCore.dll": {
             "assemblyVersion": "1.8.23.0",
-            "fileVersion": "1.8.23.0"
+            "fileVersion": "0.0.0.0"
           }
         },
         "compile": {
@@ -509,7 +524,7 @@
         "runtime": {
           "lib/netstandard2.0/Hangfire.SqlServer.dll": {
             "assemblyVersion": "1.8.23.0",
-            "fileVersion": "1.8.23.0"
+            "fileVersion": "0.0.0.0"
           }
         },
         "compile": {
@@ -1094,17 +1109,17 @@
           "runtimes/win-arm64/native/Microsoft.Data.SqlClient.SNI.dll": {
             "rid": "win-arm64",
             "assetType": "native",
-            "fileVersion": "6.2.0.0"
+            "fileVersion": "0.0.0.0"
           },
           "runtimes/win-x64/native/Microsoft.Data.SqlClient.SNI.dll": {
             "rid": "win-x64",
             "assetType": "native",
-            "fileVersion": "6.2.0.0"
+            "fileVersion": "0.0.0.0"
           },
           "runtimes/win-x86/native/Microsoft.Data.SqlClient.SNI.dll": {
             "rid": "win-x86",
             "assetType": "native",
-            "fileVersion": "6.2.0.0"
+            "fileVersion": "0.0.0.0"
           }
         }
       },
@@ -2011,6 +2026,16 @@
           "lib/net9.0/System.Configuration.ConfigurationManager.dll": {}
         }
       },
+      "System.Diagnostics.EventLog/10.0.2": {
+        "runtimeTargets": {
+          "runtimes/win/lib/net10.0/System.Diagnostics.EventLog.Messages.dll": {
+            "rid": "win",
+            "assetType": "runtime",
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.225.61305"
+          }
+        }
+      },
       "System.Formats.Nrbf/9.0.0": {
         "runtime": {
           "lib/net9.0/System.Formats.Nrbf.dll": {
@@ -2128,7 +2153,7 @@
         "runtime": {
           "lib/netstandard2.0/xunit.abstractions.dll": {
             "assemblyVersion": "2.0.0.0",
-            "fileVersion": "2.0.0.0"
+            "fileVersion": "0.0.0.0"
           }
         },
         "compile": {
@@ -4304,9 +4329,6 @@
       "Microsoft.Extensions.Primitives/10.0.2": {
         "compileOnly": true
       },
-      "System.Diagnostics.EventLog/10.0.2": {
-        "compileOnly": true
-      },
       "System.Security.Cryptography.Pkcs/10.0.0": {
         "compile": {
           "lib/net10.0/System.Security.Cryptography.Pkcs.dll": {}
@@ -4374,6 +4396,13 @@
       "sha512": "sha512-YCOTtF3NNOQI83PlfjeNDDBkofJDfdET2CwhfQsiVBwmsU6lP19QW9NVTIH9epl+MnOsyFC2G1RnlPSGV8F1FQ==",
       "path": "hangfire.core/1.8.23",
       "hashPath": "hangfire.core.1.8.23.nupkg.sha512"
+    },
+    "Hangfire.InMemory/1.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-56H71lfcqn5sN/8Bjj9hOLGTG5HIERLRuMsRJTFpw0Tsq5ck5OUkNvtUw92s7bwD3PRKOo4PkDGqNs9KugaqoQ==",
+      "path": "hangfire.inmemory/1.0.0",
+      "hashPath": "hangfire.inmemory.1.0.0.nupkg.sha512"
     },
     "Hangfire.NetCore/1.8.23": {
       "type": "package",
@@ -4878,6 +4907,13 @@
       "sha512": "sha512-dvjqKp+2LpGid6phzrdrS/2mmEPxFl3jE1+L7614q4ZChKbLJCpHXg6sBILlCCED1t//EE+un/UdAetzIMpqnw==",
       "path": "system.configuration.configurationmanager/9.0.4",
       "hashPath": "system.configuration.configurationmanager.9.0.4.nupkg.sha512"
+    },
+    "System.Diagnostics.EventLog/10.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-TJPpTLF5MFPobq09c9BQ5X8QuviQfsKvH0Jbm7MkGylGvfIdRqJQLZDPC5sMRFkk9aZhmgir1NJKekip2NxfaA==",
+      "path": "system.diagnostics.eventlog/10.0.2",
+      "hashPath": "system.diagnostics.eventlog.10.0.2.nupkg.sha512"
     },
     "System.Formats.Nrbf/9.0.0": {
       "type": "package",
@@ -6740,13 +6776,6 @@
       "sha512": "sha512-QmSiO+oLBEooGgB3i0GRXyeYRDHjllqt3k365jwfZlYWhvSHA3UL2NEVV5m8aZa041eIlblo6KMI5txvTMpTwA==",
       "path": "microsoft.extensions.primitives/10.0.2",
       "hashPath": "microsoft.extensions.primitives.10.0.2.nupkg.sha512"
-    },
-    "System.Diagnostics.EventLog/10.0.2": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-TJPpTLF5MFPobq09c9BQ5X8QuviQfsKvH0Jbm7MkGylGvfIdRqJQLZDPC5sMRFkk9aZhmgir1NJKekip2NxfaA==",
-      "path": "system.diagnostics.eventlog/10.0.2",
-      "hashPath": "system.diagnostics.eventlog.10.0.2.nupkg.sha512"
     },
     "System.Security.Cryptography.Pkcs/10.0.0": {
       "type": "package",
