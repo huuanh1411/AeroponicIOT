@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj": {}
+    "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj": {}
   },
   "projects": {
-    "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj": {
+    "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj",
+        "projectUniqueName": "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj",
         "projectName": "AeroponicIOT",
-        "projectPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj",
-        "packagesPath": "C:\\Users\\ADMIN\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\obj\\",
+        "projectPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj",
+        "packagesPath": "/home/runner/.nuget/packages/",
+        "outputPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\ADMIN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/home/runner/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
@@ -137,7 +137,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.301/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.AspNetCore": "(,10.0.32767]",
             "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",

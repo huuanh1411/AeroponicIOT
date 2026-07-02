@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\AeroponicIOT.Tests.csproj": {}
+    "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/AeroponicIOT.Tests.csproj": {}
   },
   "projects": {
-    "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj": {
+    "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj",
+        "projectUniqueName": "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj",
         "projectName": "AeroponicIOT",
-        "projectPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj",
-        "packagesPath": "C:\\Users\\ADMIN\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\obj\\",
+        "projectPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj",
+        "packagesPath": "/home/runner/.nuget/packages/",
+        "outputPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\ADMIN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/home/runner/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
@@ -137,7 +137,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.301/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.AspNetCore": "(,10.0.32767]",
             "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",
@@ -555,17 +555,17 @@
         }
       }
     },
-    "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\AeroponicIOT.Tests.csproj": {
+    "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/AeroponicIOT.Tests.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\AeroponicIOT.Tests.csproj",
+        "projectUniqueName": "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/AeroponicIOT.Tests.csproj",
         "projectName": "AeroponicIOT.Tests",
-        "projectPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\AeroponicIOT.Tests.csproj",
-        "packagesPath": "C:\\Users\\ADMIN\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\tests\\AeroponicIOT.Tests\\obj\\",
+        "projectPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/AeroponicIOT.Tests.csproj",
+        "packagesPath": "/home/runner/.nuget/packages/",
+        "outputPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/tests/AeroponicIOT.Tests/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\ADMIN\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/home/runner/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
@@ -578,8 +578,8 @@
             "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj": {
-                "projectPath": "C:\\Users\\ADMIN\\Documents\\AeroponicIOT\\AeroponicIOT.csproj"
+              "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj": {
+                "projectPath": "/home/runner/work/AeroponicIOT/AeroponicIOT/AeroponicIOT.csproj"
               }
             }
           }
@@ -596,6 +596,10 @@
           "framework": "net10.0",
           "targetAlias": "net10.0",
           "dependencies": {
+            "Hangfire.InMemory": {
+              "target": "Package",
+              "version": "[1.0.0, )"
+            },
             "Microsoft.AspNetCore.Mvc.Testing": {
               "target": "Package",
               "version": "[10.0.2, )"
@@ -635,7 +639,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.301/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.CSharp": "(,4.7.32767]",
             "Microsoft.VisualBasic": "(,10.4.32767]",
